@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Terrace Solar Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
+<style>
+/* Layout: one working screen. Viewer left, spec sheet right; stacks on phones. */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --fg: #16202b;
+  --muted: #5b6876;
+  --line: #d5dce3;
+  --accent: #1d3f8f;      /* panel blue */
+  --accent-fg: #ffffff;
+  --ok: #1f7a4d;
+  --stage: #dfe5eb;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f151c; --surface: #17202a; --fg: #e6ecf2; --muted: #93a1b0; --line: #2a3644;
+  --accent: #7ea2ff; --accent-fg: #0b1220; --ok: #5ccf94; --stage: #1c2733; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f151c; --surface: #17202a; --fg: #e6ecf2; --muted: #93a1b0; --line: #2a3644;
+  --accent: #7ea2ff; --accent-fg: #0b1220; --ok: #5ccf94; --stage: #1c2733; color-scheme: dark }
+
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--sans); }
+.wrap { max-width: 1200px; margin: 0 auto; padding-block: 20px 28px; padding-inline: 16px;
+        display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; }
+@media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); } }
+header { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+h1 { font-size: 1.45rem; font-weight: 600; margin: 0; text-wrap: balance; }
+.src { color: var(--muted); font-size: .85rem; }
+
+.stage { position: relative; background: var(--stage); border-radius: 10px; overflow: hidden;
+         min-height: 420px; height: 68vh; max-height: 640px; }
+model-viewer { width: 100%; height: 100%; --poster-color: transparent; background: var(--stage); }
+.ar-btn { position: absolute; right: 12px; bottom: 12px; border: 0; border-radius: 8px;
+          background: var(--accent); color: var(--accent-fg); font: 600 .95rem var(--sans);
+          padding: 10px 16px; cursor: pointer; }
+.ar-btn:focus-visible, .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hint { position: absolute; left: 12px; bottom: 14px; font-size: .8rem; color: var(--muted); }
+
+aside { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); color: var(--fg); font: 500 .9rem var(--sans); padding: 9px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+.label { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 6px; }
+dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; }
+dt { color: var(--muted); }
+dd { margin: 0; text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.big { font-family: var(--mono); font-size: 2rem; font-weight: 500; line-height: 1.1; }
+.big small { font-size: .9rem; color: var(--muted); }
+.ok { color: var(--ok); }
+section { border-top: 1px solid var(--line); padding-top: 14px; }
+p.note { margin: 0; color: var(--muted); font-size: .85rem; }
+.legend { display: flex; gap: 14px; font-size: .85rem; color: var(--muted); }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Terrace Solar Preview</h1>
+    <span class="src">ETH3D terrace scan · 23 photos · real metres</span>
+  </header>
+
+  <div class="stage">
+    <model-viewer id="mv" src="terrace_tilted.glb" alt="Terrace with solar panel layout"
+      loading="eager" reveal="auto" camera-controls touch-action="pan-y" shadow-intensity="0.8" exposure="1.05"
+      camera-orbit="-30deg 60deg auto" ar ar-modes="webxr scene-viewer quick-look" ar-scale="fixed">
+      <button slot="ar-button" class="ar-btn">View in AR</button>
+    </model-viewer>
+    <span class="hint">Drag to orbit · pinch or scroll to zoom</span>
+  </div>
+
+  <aside>
+    <div>
+      <p class="label">Layout</p>
+      <div class="seg" role="group" aria-label="Panel layout">
+        <button id="b-tilted" aria-pressed="true">Tilted 15°</button>
+        <button id="b-flat" aria-pressed="false">Flat</button>
+      </div>
+    </div>
+
+    <div>
+      <p class="label">System size</p>
+      <div class="big" id="kwp">9.6 <small>kWp</small></div>
+      <dl style="margin-top:8px">
+        <dt>Panels</dt><dd id="n">24 × 400 W</dd>
+        <dt>Panel size</dt><dd>1.722 × 1.134 m</dd>
+        <dt>Orientation</dt><dd id="orient">landscape</dd>
+        <dt>Row gap</dt><dd id="gap">0.84 m</dd>
+        <dt>Roof outline</dt><dd>130.7 m²</dd>
+        <dt>Usable area</dt><dd>102.9 m²</dd>
+      </dl>
+    </div>
+
+    <section>
+      <p class="label">Checked against laser scan</p>
+      <dl>
+        <dt>Surface error (median)</dt><dd class="ok">1.0 cm</dd>
+        <dt>Roof plane tilt error</dt><dd class="ok">0.08°</dd>
+        <dt>Outline overlap</dt><dd class="ok">95.5 %</dd>
+        <dt>Corners off the roof</dt><dd class="ok">0 / 156</dd>
+      </dl>
+    </section>
+
+    <section>
+      <div class="legend"><span><i class="sw" style="background:#14265f"></i>Panels</span><span><i class="sw" style="background:#8c8c8c"></i>Terrace surface</span></div>
+    </section>
+
+    <section>
+      <p class="note">AR places the design at true size on a flat surface near you. It is not yet anchored to the real terrace; that needs the corner-tap alignment step. Tilted rows face a direction chosen for illustration, since the scan has no north.</p>
+    </section>
+  </aside>
+</div>
+
+<script>
+const LAYOUTS = {
+  tilted: { src: "terrace_tilted.glb", kwp: "9.6", n: "24 × 400 W", orient: "landscape", gap: "0.84 m" },
+  flat:   { src: "terrace_flat.glb",   kwp: "15.6", n: "39 × 400 W", orient: "landscape", gap: "none" },
+};
+const mv = document.getElementById("mv");
+function show(key) {
+  const L = LAYOUTS[key];
+  mv.src = L.src;
+  document.getElementById("kwp").innerHTML = L.kwp + " <small>kWp</small>";
+  document.getElementById("n").textContent = L.n;
+  document.getElementById("orient").textContent = L.orient;
+  document.getElementById("gap").textContent = L.gap;
+  for (const k of Object.keys(LAYOUTS))
+    document.getElementById("b-" + k).setAttribute("aria-pressed", String(k === key));
+}
+document.getElementById("b-tilted").addEventListener("click", () => show("tilted"));
+document.getElementById("b-flat").addEventListener("click", () => show("flat"));
+</script>
+
+</body>
+</html>

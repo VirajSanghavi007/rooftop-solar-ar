@@ -1,0 +1,13 @@
+# environments and caches
+.venv/
+__pycache__/
+.pytest_cache/
+.claude/
+
+# large local data, downloaded tools and generated outputs
+data/*
+!data/rooftop_01/
+data/rooftop_01/*
+!data/rooftop_01/measurements.json
+tools/
+outputs/

@@ -1,0 +1,55 @@
+# Rooftop scan-to-CAD prototype
+
+Phone photos -> COLMAP -> Open3D planes -> STEP/DXF for AutoCAD.
+
+## Setup (already done on this machine)
+
+- `.venv` (Python 3.11): open3d, numpy, scipy, matplotlib, cadquery (OpenCascade, STEP), ezdxf (DXF), pytest
+- `tools/colmap/` COLMAP 4.2.1 CUDA build (dense reconstruction needs CUDA)
+
+## Workflow
+
+1. Put photos in `data/rooftop_01/images/`, real measurements (mm) in `data/rooftop_01/measurements.json`.
+2. Run `tools/colmap/.../COLMAP.bat`, new project, images = `data/rooftop_01/images`,
+   database/workspace in `data/rooftop_01/colmap`, then Reconstruction > Automatic Reconstruction.
+3. `.venv\Scripts\python scripts\inspect_cloud.py rooftop_01` : cleans cloud, finds planes,
+   writes `outputs/rooftop_01/cleaned_cloud.ply` and `roof_preview.ply`.
+4. `.venv\Scripts\python scripts\export_cad.py rooftop_01` : writes `rooftop.step` and `rooftop.dxf`.
+5. In AutoCAD: `IMPORT` the .step (solids) or `OPEN` the .dxf (one layer per element).
+
+## Tests
+
+`.venv\Scripts\python -m pytest`
+
+## Solar panel layout (scripts/design_panels.py)
+
+`.venv\Scripts\python scripts\design_panels.py eth3d/terrace` (add `--unit-scale <m per unit>` for non-metric clouds)
+
+Steps: clean cloud, level (up = largest plane normal, sign from camera centres), split near-horizontal
+planes into connected patches, pick the largest (`--roof-index` to choose another), concave-hull outline,
+keep-outs = anything 0.15-3 m above the roof (+0.3 m clearance), 0.5 m edge setback, best-fit panel grid
+(portrait vs landscape, grid offsets, aligned to the roof's long edge).
+
+Outputs in `outputs/<site>/`: `panels_plan.png` (top-down plan), `panels_overlay.ply` (scan + blue panels +
+red outline, double-click to view), `roof_panels.step` (roof, keep-outs, panels as solids in mm, AutoCAD IMPORT),
+`panels_summary.json`.
+
+ETH3D terrace dense cloud: `colmap image_undistorter` on `dslr_calibration_jpg` (metric poses), then OpenMVS
+`InterfaceCOLMAP` + `DensifyPointCloud` (COLMAP's own patch_match_stereo crashes on this machine).
+
+### Tilted rows, roof choice, validation, AR
+
+- Tilted rows: `design_panels.py <site> --tilt 15 --latitude 47.4 --facing-deg -70`. Rows run perpendicular
+  to `--facing-deg` (direction panels face, in the plan's 2D frame), spaced so the winter-solstice noon shadow
+  clears the next row. A scan has no north: take the facing from a compass bearing on site.
+- Roof choice: the candidate table is printed; `--select highest` (roof above ground) or `--roof-index N`.
+- Accuracy vs laser scan: `scripts\validate_eth3d.py eth3d/terrace` writes `validation.json`
+  (cloud accuracy, plane tilt/height error, outline IoU/edge error, panel corner height error).
+- AR: `roof_panels.glb` (glTF 2.0, metres, Y-up, origin = roof-plane origin). Our own writer:
+  Open3D's .glb writer emits invalid buffer views.
+
+## 3D / AR preview
+
+- Online (GitHub Pages, works with "View in AR" on phones): see the repository's Pages link.
+- Local, any Windows PC with Python 3: double-click `run_preview.bat` (serves `preview/` on http://localhost:8765 and opens it).
+- Update the models: rerun `design_panels.py`, copy `outputs/<site>/roof_panels.glb` into `preview/`, push; the Pages workflow republishes.

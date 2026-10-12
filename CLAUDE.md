@@ -1,0 +1,52 @@
+# AR/VR: Hybrid scan-to-CAD prototype
+
+Global rules in `~/.claude/CLAUDE.md` apply here (no em dashes, tests for every
+new/changed function, progress counters + ETA, checkpoint/resume, detached
+long jobs, resumable downloads, Kimi K3 delegation via opencode).
+
+## Project goal
+
+Turn phone photos of a real place into dimensionally accurate, editable CAD,
+as the base for an AR solar-panel design product. Geometry-first, not
+photorealism: a clean roof plane beats a million-triangle mesh.
+
+## Current scope (prototype 1)
+
+- Environment: flat building rooftop.
+- Capture: phone photos (40-100, ~70-80% overlap), processed offline.
+- Output: STEP (surfaces and solids).
+- Target accuracy: 5-10 cm, to be validated, never assumed.
+
+## Pipeline
+
+1. Capture photos + independent tape/laser measurements (length, width, a diagonal).
+2. COLMAP: camera poses (sparse). Dense: OpenMVS (tools/openmvs), since COLMAP 4.2.1 patch_match_stereo crashes (0xC0000409) on this RTX 5050.
+3. Open3D (Python 3.11 venv): downsample, outlier removal, RANSAC plane fitting.
+4. Scale + align: photogrammetry scale is arbitrary until set from known dimensions.
+5. CadQuery (OpenCascade, in the venv) builds solids, exports STEP; ezdxf exports DXF. Opened in AutoCAD (user has AutoCAD, NOT FreeCAD).
+6. Validate against independent measurements (dimension, edge, obstacle error separately).
+
+## Layout
+
+```
+data/<site>/images/          raw photos, never modified
+data/<site>/measurements.json independent ground truth
+data/<site>/colmap/          COLMAP project
+outputs/<site>/              cleaned clouds, previews, .step, .dxf
+rooftop/                     library: cloud.py (Open3D), cad.py (CadQuery/ezdxf)
+rooftop/geometry.py, layout.py, panels.py, ar_export.py, validate.py: levelling, outline/keep-outs/(tilted) panel grid, STEP/PLY/PNG/GLB export, laser-scan validation
+scripts/                     inspect_cloud.py, export_cad.py, design_panels.py, validate_eth3d.py (CLIs)
+tools/openmvs/               OpenMVS 2.4.0 (DensifyPointCloud, Viewer.exe = .ply handler)
+data/eth3d/{terrace,facade}/ ETH3D with metric poses + laser scans (ground truth)
+tests/                       pytest, run with .venv\Scripts\python -m pytest
+tools/colmap/                COLMAP 4.2.1 CUDA build (bin\colmap.exe, COLMAP.bat)
+```
+
+## Conventions
+
+- CAD units: millimetres. Point cloud units are arbitrary until scaled.
+- Python 3.11 venv at .venv (system default python is 3.14, use .venv).
+- Do not validate the scan against a CAD model built from the same data (circular).
+- Human-assisted first (user taps/corrects roof corners, enters one known length),
+  automate edge/corner/obstacle detection later.
+- Out of scope for now: UWB, live AR scanning, neural nets, drones, relocalization.

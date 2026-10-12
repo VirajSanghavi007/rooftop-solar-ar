@@ -1,0 +1,9 @@
+{
+  "_note": "Placeholder values in mm. Replace with real tape/laser measurements.",
+  "length": 12000,
+  "width": 8000,
+  "diagonal": null,
+  "slab_thickness": 150,
+  "parapet_height": 900,
+  "parapet_thickness": 200
+}
