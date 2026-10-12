@@ -52,4 +52,7 @@ ETH3D terrace dense cloud: `colmap image_undistorter` on `dslr_calibration_jpg` 
 
 - Online (GitHub Pages, works with "View in AR" on phones): see the repository's Pages link.
 - Local, any Windows PC with Python 3: double-click `run_preview.bat` (serves `preview/` on http://localhost:8765 and opens it).
-- Update the models: rerun `design_panels.py`, copy `outputs/<site>/roof_panels.glb` into `preview/`, push; the Pages workflow republishes.
+- Update the models: rerun `design_panels.py`, copy `outputs/<site>/roof_panels.glb` (3D view) and
+  `panels_ar.glb` (AR: panels only, no roof slab) into `preview/`, push; the Pages workflow republishes.
+- Panels are generated, not downloaded: aluminium frame + glass with a 120 half-cut cell texture, at the
+  exact layout size. AR offers life size (outdoors) or tabletop 1:20.

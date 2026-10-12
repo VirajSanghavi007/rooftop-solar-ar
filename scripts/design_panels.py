@@ -124,6 +124,7 @@ def run(site, unit_scale=1.0, voxel=0.05, roof_index=None, select="largest", max
                                   + (f", {tilt:g} deg tilt" if tilt > 0 else "")),
         "step": P.export_step(out / "roof_panels.step", frame, outline, corners, obstacles),
         "glb": write_glb(out / "roof_panels.glb", frame, outline, corners),
+        "glb_ar": write_glb(out / "panels_ar.glb", frame, outline, corners, include_roof=False),
     }
     summary = {
         "site": site, "roof_index": idx, "roof_tilt_deg": round(frame.tilt_deg(), 2),

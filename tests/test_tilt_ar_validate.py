@@ -131,8 +131,8 @@ def test_write_glb_is_y_up_and_metric(tmp_path):
     assert b[:4] == b"glTF" and int.from_bytes(b[8:12], "little") == len(b)
     m = o3d.io.read_triangle_mesh(str(path), enable_post_processing=True)  # independent reader (Assimp)
     v = np.asarray(m.vertices)
-    assert len(m.triangles) == 12 + len(A.polygon_mesh(box(-1, -1, 3, 3), frame)[1])
-    assert v[:, 1].max() == pytest.approx(0.1, abs=1e-5)   # panel top 0.1 m up (glTF Y)
+    assert len(m.triangles) == 12 + 2 + len(A.polygon_mesh(box(-1, -1, 3, 3), frame)[1])
+    assert v[:, 1].max() == pytest.approx(0.1 + A.GLASS_LIFT, abs=1e-5)  # glass on top, 0.1 m up (glTF Y)
     assert np.ptp(v[:, 0]) == pytest.approx(4, abs=1e-5)   # 4 m roof, origin-centred
     assert abs(v[:, 0].min() + 1) < 1e-5
 
@@ -203,3 +203,56 @@ def test_validate_eth3d_terrace_meets_target(eth3d_scan_available):
     assert r["outline"]["iou"] > 0.85
     assert r["panels"]["corners_outside_true_roof"] == 0
     assert r["panels"]["corner_height_abs_median_m"] < 0.10
+
+
+# ---------- realistic panels + AR-only model ----------
+
+def _gltf_json(path):
+    import json
+    b = Path(path).read_bytes()
+    n = int.from_bytes(b[12:16], "little")
+    return json.loads(b[20:20 + n]), b
+
+
+def test_cell_texture_png_dimensions_and_cells():
+    from io import BytesIO
+    from PIL import Image
+    img = np.asarray(Image.open(BytesIO(A.cell_texture_png(width=800))).convert("RGB"), float) / 255
+    h, w, _ = img.shape
+    assert w == 800 and h == round(800 * 1.134 / 1.722)
+    dark = img.mean(axis=2) < 0.2
+    assert 0.6 < dark.mean() < 0.95                       # mostly cell area
+    # count cells along the middle row: dark runs separated by light gaps
+    row = dark[h // 12]
+    runs = np.count_nonzero(np.diff(row.astype(int)) == 1) + int(row[0])
+    assert runs == 20
+
+
+def test_laminate_quad_inset_lift_and_uv_along_long_edge():
+    c = np.array([[0, 0, 0], [0, 2, 0], [1, 2, 0], [1, 0, 0.0]])  # long edge is c0->c1
+    v, t, uv = A.laminate_quad(c, frame_width=0.05, lift=0.01)
+    assert np.allclose(v[:, 2], 0.01)
+    assert v[:, 0].min() == pytest.approx(0.05) and v[:, 1].max() == pytest.approx(1.95)
+    assert np.allclose(uv[1], [1, 0])                      # u runs along the 2 m edge
+    v2, _, uv2 = A.laminate_quad(c[[0, 3, 2, 1]])           # same panel, other winding
+    assert np.allclose(uv2[3], [1, 0])
+
+
+def test_glb_has_textured_glass_and_metal_frame(tmp_path):
+    corners = P.panel_corners_3d(FLAT, [box(0, 0, 1.7, 1.1)])
+    j, b = _gltf_json(A.write_glb(tmp_path / "p.glb", FLAT, box(-1, -1, 3, 3), corners))
+    mats = {m["name"]: m["pbrMetallicRoughness"] for m in j["materials"]}
+    assert set(mats) == {"roof", "frame", "glass"}
+    assert mats["frame"]["metallicFactor"] > 0.5
+    assert "baseColorTexture" in mats["glass"]
+    img_view = j["bufferViews"][j["images"][0]["bufferView"]]
+    start = 20 + int.from_bytes(b[12:16], "little") + 8 + img_view["byteOffset"]
+    assert b[start:start + 8] == b"\x89PNG\r\n\x1a\n"
+    glass = next(p for p in j["meshes"][0]["primitives"] if j["materials"][p["material"]]["name"] == "glass")
+    assert "TEXCOORD_0" in glass["attributes"]
+
+
+def test_ar_glb_excludes_roof(tmp_path):
+    corners = P.panel_corners_3d(FLAT, [box(0, 0, 1.7, 1.1)])
+    j, _ = _gltf_json(A.write_glb(tmp_path / "a.glb", FLAT, box(-1, -1, 3, 3), corners, include_roof=False))
+    assert {m["name"] for m in j["materials"]} == {"frame", "glass"}

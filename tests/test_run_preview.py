@@ -36,7 +36,7 @@ def test_run_preview_bat_serves_page_and_models():
         else:
             pytest.fail(f"server never answered: {proc.stdout.read1(4000) if proc.poll() is not None else ''}")
         assert "<title>Terrace Solar Preview</title>" in html
-        for name in ("terrace_tilted.glb", "terrace_flat.glb"):
+        for name in ("terrace_tilted.glb", "terrace_flat.glb", "terrace_tilted_ar.glb", "terrace_flat_ar.glb"):
             assert name in html
             assert urllib.request.urlopen(base + name, timeout=2).read()[:4] == b"glTF"
     finally:

@@ -41,10 +41,7 @@ h1 { font-size: 1.45rem; font-weight: 600; margin: 0; text-wrap: balance; }
 .stage { position: relative; background: var(--stage); border-radius: 10px; overflow: hidden;
          min-height: 420px; height: 68vh; max-height: 640px; }
 model-viewer { width: 100%; height: 100%; --poster-color: transparent; background: var(--stage); }
-.ar-btn { position: absolute; right: 12px; bottom: 12px; border: 0; border-radius: 8px;
-          background: var(--accent); color: var(--accent-fg); font: 600 .95rem var(--sans);
-          padding: 10px 16px; cursor: pointer; }
-.ar-btn:focus-visible, .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .hint { position: absolute; left: 12px; bottom: 14px; font-size: .8rem; color: var(--muted); }
 
 aside { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
@@ -61,7 +58,13 @@ dd { margin: 0; text-align: right; font-family: var(--mono); font-variant-numeri
 section { border-top: 1px solid var(--line); padding-top: 14px; }
 p.note { margin: 0; color: var(--muted); font-size: .85rem; }
 .legend { display: flex; gap: 14px; font-size: .85rem; color: var(--muted); }
-.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.ar-box { display: flex; flex-direction: column; gap: 10px; }
+.ar-go { border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-fg);
+         font: 600 1rem var(--sans); padding: 12px; cursor: pointer; }
+.ar-go:disabled { opacity: .45; cursor: not-allowed; }
+.ar-go:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* off-screen but rendered, so its model is loaded before the AR tap */
+.ar-host { position: absolute; width: 1px; height: 1px; left: 0; top: 0; opacity: 0; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -74,11 +77,16 @@ p.note { margin: 0; color: var(--muted); font-size: .85rem; }
 
   <div class="stage">
     <model-viewer id="mv" src="terrace_tilted.glb" alt="Terrace with solar panel layout"
-      loading="eager" reveal="auto" camera-controls touch-action="pan-y" shadow-intensity="0.8" exposure="1.05"
-      camera-orbit="-30deg 60deg auto" ar ar-modes="webxr scene-viewer quick-look" ar-scale="fixed">
-      <button slot="ar-button" class="ar-btn">View in AR</button>
-    </model-viewer>
+      loading="eager" reveal="auto" camera-controls touch-action="pan-y" shadow-intensity="1"
+      shadow-softness="0.6" exposure="1.05" environment-image="neutral"
+      camera-orbit="-30deg 60deg auto"></model-viewer>
     <span class="hint">Drag to orbit · pinch or scroll to zoom</span>
+    <!-- Panels-only model, kept loaded so the AR button can start a session inside the tap -->
+    <model-viewer id="mvar" class="ar-host" src="terrace_tilted_ar.glb" alt="Solar panels for AR"
+      loading="eager" ar ar-modes="webxr scene-viewer quick-look" ar-placement="floor"
+      ar-scale="fixed" shadow-intensity="1" shadow-softness="0.5" environment-image="neutral">
+      <span slot="ar-button"></span>
+    </model-viewer>
   </div>
 
   <aside>
@@ -113,25 +121,62 @@ p.note { margin: 0; color: var(--muted); font-size: .85rem; }
       </dl>
     </section>
 
-    <section>
-      <div class="legend"><span><i class="sw" style="background:#14265f"></i>Panels</span><span><i class="sw" style="background:#8c8c8c"></i>Terrace surface</span></div>
+    <section class="ar-box">
+      <p class="label">See it in your space</p>
+      <div class="seg" role="group" aria-label="AR size">
+        <button id="s-life" aria-pressed="true">Life size</button>
+        <button id="s-table" aria-pressed="false">Tabletop 1:20</button>
+      </div>
+      <button id="ar-go" class="ar-go" disabled>View in AR</button>
+      <p class="note" id="ar-msg">Checking whether this device supports AR…</p>
     </section>
 
     <section>
-      <p class="note">AR places the design at true size on a flat surface near you. It is not yet anchored to the real terrace; that needs the corner-tap alignment step. Tilted rows face a direction chosen for illustration, since the scan has no north.</p>
+      <p class="note">AR shows only the panels, with their shadow, so the real ground is the roof. Life size is 16 × 12 m: use it outdoors. The layout is not yet anchored to the real terrace; that needs the corner-tap alignment step. Tilted rows face a direction chosen for illustration, since the scan has no north.</p>
     </section>
   </aside>
 </div>
 
 <script>
 const LAYOUTS = {
-  tilted: { src: "terrace_tilted.glb", kwp: "9.6", n: "24 × 400 W", orient: "landscape", gap: "0.84 m" },
-  flat:   { src: "terrace_flat.glb",   kwp: "15.6", n: "39 × 400 W", orient: "landscape", gap: "none" },
+  tilted: { src: "terrace_tilted.glb", ar: "terrace_tilted_ar.glb", kwp: "9.6", n: "24 × 400 W", orient: "landscape", gap: "0.84 m" },
+  flat:   { src: "terrace_flat.glb",   ar: "terrace_flat_ar.glb",   kwp: "15.6", n: "39 × 400 W", orient: "landscape", gap: "none" },
 };
+const SCALES = { life: { scale: "1 1 1", arScale: "fixed" }, table: { scale: "0.05 0.05 0.05", arScale: "auto" } };
 const mv = document.getElementById("mv");
+const mvar = document.getElementById("mvar");
+const go = document.getElementById("ar-go");
+const msg = document.getElementById("ar-msg");
+
+function setScale(key) {
+  mvar.scale = SCALES[key].scale;
+  mvar.arScale = SCALES[key].arScale;
+  for (const k of Object.keys(SCALES))
+    document.getElementById(k === "life" ? "s-life" : "s-table").setAttribute("aria-pressed", String(k === key));
+}
+document.getElementById("s-life").addEventListener("click", () => setScale("life"));
+document.getElementById("s-table").addEventListener("click", () => setScale("table"));
+
+function refreshAR() {
+  if (mvar.canActivateAR) {
+    go.disabled = false;
+    msg.textContent = "Point your phone at open ground, move it slowly until the panels appear, then walk around them.";
+  } else {
+    go.disabled = true;
+    msg.textContent = "AR needs a phone: open this page in Chrome on Android (with Google Play Services for AR) or Safari on iPhone.";
+  }
+}
+mvar.addEventListener("load", refreshAR);
+setTimeout(refreshAR, 2500);
+go.addEventListener("click", () => mvar.activateAR());
+mvar.addEventListener("ar-status", (e) => {
+  if (e.detail.status === "failed") msg.textContent = "AR could not start on this device. Try Chrome (Android) or Safari (iPhone).";
+});
+
 function show(key) {
   const L = LAYOUTS[key];
   mv.src = L.src;
+  mvar.src = L.ar;
   document.getElementById("kwp").innerHTML = L.kwp + " <small>kWp</small>";
   document.getElementById("n").textContent = L.n;
   document.getElementById("orient").textContent = L.orient;
