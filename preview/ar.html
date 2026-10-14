@@ -43,7 +43,7 @@ li + li { margin-top: 4px; }
 .go:disabled { opacity: .45; cursor: not-allowed; }
 .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 6px; }
 .note { color: var(--muted); font-size: .85rem; margin: 0; }
-.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
 label.f { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--muted); }
 label.f input { font: 500 1rem var(--mono); padding: 8px; border: 1px solid var(--line); border-radius: 8px;
                 background: var(--bg); color: var(--fg); min-width: 0; }
@@ -62,10 +62,11 @@ svg.map { width: 100%; height: auto; display: block; }
 .hud svg { width: 84px; height: auto; flex: none; }
 .hud svg[hidden] { display: none; }
 .bar { position: absolute; left: 12px; right: 12px; bottom: max(16px, env(safe-area-inset-bottom));
-       display: flex; gap: 8px; pointer-events: auto; }
-.bar button { flex: 1; border: 0; border-radius: 8px; padding: 12px 6px; font: 600 .9rem var(--sans);
+       display: flex; flex-wrap: wrap; gap: 8px; pointer-events: auto; }
+.bar button { flex: 1 1 28%; border: 0; border-radius: 8px; padding: 12px 6px; font: 600 .9rem var(--sans);
               background: rgba(12, 18, 26, .8); color: #fff; }
 .bar button[aria-pressed="true"] { background: #1d3f8f; }
+.bar button.primary { background: #1f9d55; }
 .bar button[hidden] { display: none; }
 </style>
 </head>
@@ -76,7 +77,7 @@ svg.map { width: 100%; height: auto; display: block; }
 
   <div class="card">
     <div class="seg" role="group" aria-label="Mode">
-      <button id="m-four" aria-pressed="true">Your roof · 4 corners</button>
+      <button id="m-four" aria-pressed="true">Your roof · tap corners</button>
       <button id="m-two" aria-pressed="false">Scanned design · 2 corners</button>
     </div>
   </div>
@@ -87,11 +88,13 @@ svg.map { width: 100%; height: auto; display: block; }
     <ol>
       <li>Move the phone slowly until a ring sits on the roof surface.</li>
       <li>Tap corner <span class="dot-a">A</span>, then corner <span class="dot-b">B</span>: two ends of the <b>sunny edge</b> (south side in India). Tilted panels face this edge.</li>
-      <li>Tap the other two corners, in any order.</li>
+      <li>Keep walking around the edge, tapping every corner in order (L-shapes and notches are fine). Finish by tapping near corner A again, or press <b>Close roof</b>. A plain 4-corner roof can be tapped in any order.</li>
       <li>Real-size panels (1.722 × 1.134 m, 400 W) fill the roof. A smaller roof gets fewer panels; the panels never shrink.</li>
+      <li>Water tank, stair room, AC unit? Press <b>Add obstacle</b>, tap around it (or just two opposite corners for a box), then <b>Finish obstacle</b>. Panels keep the clearance away from it.</li>
     </ol>
     <div class="row">
       <label class="f">Edge setback (m)<input id="setback" type="number" inputmode="decimal" min="0" max="3" step="0.1" value="0.5"></label>
+      <label class="f">Obstacle clearance (m)<input id="clear" type="number" inputmode="decimal" min="0" max="3" step="0.1" value="0.3"></label>
       <label class="f">Latitude (°)<input id="lat" type="number" inputmode="decimal" min="-66" max="66" step="0.1" value="20"></label>
     </div>
     <button class="link" id="geo">Use my location for latitude</button>
@@ -119,6 +122,9 @@ svg.map { width: 100%; height: auto; display: block; }
 <div id="overlay">
   <div class="hud"><div class="txt" id="hud-txt">Move the phone slowly to find the surface</div><svg id="hud-map" hidden></svg></div>
   <div class="bar">
+    <button id="o-close" class="primary" hidden>Close roof</button>
+    <button id="o-obs" hidden>Add obstacle</button>
+    <button id="o-fin" class="primary" hidden>Finish obstacle</button>
     <button id="o-flat" aria-pressed="true" hidden>Flat</button>
     <button id="o-tilt" aria-pressed="false" hidden>Tilted 15°</button>
     <button id="o-undo">Undo</button>
@@ -284,35 +290,37 @@ function panelMeshes(L, y0, tiltDeg) {
 
 function showLive() {
   if (group) scene.remove(group);
+  group = null;
   const y0 = taps.reduce((s, p) => s + p[1], 0) / taps.length;
-  const pts = taps.map((p) => [p[0], p[2]]);
+  const flat = (pts) => pts.map((p) => [p[0], p[2]]);
   const sunAlt = winterSunAltitude(parseFloat($("lat").value) || 20);
   const setback = Math.max(0, parseFloat($("setback").value) || 0);
+  const clearance = Math.max(0, parseFloat($("clear").value) || 0);
   const tiltDeg = liveTilt ? TILT : 0;
   let L;
   try {
-    L = layoutRoof(pts, { setback, tiltDeg, sunAltDeg: sunAlt });
+    L = layoutRoof(flat(taps), { setback, tiltDeg, sunAltDeg: sunAlt, clearance, obstacles: obstacles.map(flat) });
   } catch (e) {
-    $("hud-txt").innerHTML = `Can't use these corners<small>${e.message}. Press Redo.</small>`;
-    return;
+    $("hud-txt").innerHTML = `Can't use these corners<small>${e.message}. Press Undo or Redo.</small>`;
+    return false;
   }
   group = new THREE.Group();
   group.add(lineLoop(L.roof.map((p) => v3(p, y0 + 0.02)), COL.roof));
-  if (L.usable) group.add(lineLoop(L.usable.map((p) => v3(p, y0 + 0.02)), COL.keep));
+  L.obstacles.forEach((o) => group.add(lineLoop(o.map((p) => v3(p, y0 + 0.03)), COL.keep)));
   const xs = L.roof.map((p) => p[0]), zs = L.roof.map((p) => p[1]);
   group.add(shadowCatcher((Math.max(...xs) + Math.min(...xs)) / 2, y0, (Math.max(...zs) + Math.min(...zs)) / 2,
                           Math.max(...xs) - Math.min(...xs) + 4, Math.max(...zs) - Math.min(...zs) + 4));
   group.add(panelMeshes(L, y0, tiltDeg));
   scene.add(group);
-  if (tapLine) { scene.remove(tapLine); tapLine = null; }
   const n = L.panels.length, kwp = (n * PANEL.watts) / 1000;
   const sides = sideLengths(L.roof).map((s) => s.toFixed(2)).join(" · ");
+  const obsTxt = obstacles.length ? ` · ${obstacles.length} obstacle${obstacles.length > 1 ? "s" : ""}` : "";
   $("hud-txt").innerHTML = n
     ? `${n} panels · ${kwp.toFixed(1)} kWp · ${liveTilt ? `tilted ${TILT}°` : "flat"}` +
-      `<small>sides ${sides} m · roof ${area(L.roof).toFixed(1)} m² · ${L.orientation}` +
+      `<small>sides ${sides} m · roof ${area(L.roof).toFixed(1)} m² · ${L.orientation}${obsTxt}` +
       (liveTilt ? ` · row pitch ${L.rowPitch.toFixed(2)} m` : "") + `</small>`
-    : `No panel fits<small>sides ${sides} m · ${setback} m setback leaves too little room</small>`;
-  $("o-flat").hidden = $("o-tilt").hidden = false;
+    : `No panel fits<small>sides ${sides} m · ${setback} m setback leaves too little room${obsTxt}</small>`;
+  return true;
 }
 
 function showDesign() {
@@ -336,63 +344,120 @@ function showDesign() {
     `<small>tapped ${pl.tappedLength.toFixed(2)} m · design ${pl.designLength.toFixed(2)} m · ${sign}${pl.errorPct.toFixed(1)} %</small>`;
 }
 
-const need = () => (mode === "four" ? 4 : 2);
-function prompt() {
-  const k = taps.length;
-  const names = ["corner A (green)", "corner B (blue), the other end of the sunny edge", "a third corner", "the last corner"];
-  if (k < need()) $("hud-txt").innerHTML = `Put the ring on ${names[k]} and tap` +
-    (k ? `<small>${k} of ${need()} corners</small>` : "");
+// ---------- taps ----------
+// "two" mode: taps = corners A, B of the scanned design.
+// "four" mode: taps = roof corners in order; then optional obstacles, each a list of taps.
+let roofClosed = false, phase = "roof", obstacles = [], obsTaps = [];
+let roofMarks = [], obsMarks = [], obstacleMarks = [], obsLine = null;
+const CLOSE_DIST = 0.35;                       // tap this near corner A to close the roof
+
+function mark(p, color) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 16), new THREE.MeshBasicMaterial({ color }));
+  m.position.set(p[0], p[1] + 0.15, p[2]);
+  scene.add(m);
+  return m;
 }
 
-function redrawTapLine() {
-  if (tapLine) scene.remove(tapLine);
-  tapLine = null;
-  if (taps.length >= 2 && taps.length < need()) {
-    tapLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(taps.map((p) => new THREE.Vector3(p[0], p[1] + 0.02, p[2]))),
-                             new THREE.LineBasicMaterial({ color: 0xffffff }));
-    scene.add(tapLine);
+function polyline(points, color, closed = false) {
+  const g = new THREE.BufferGeometry().setFromPoints(points.map((p) => new THREE.Vector3(p[0], p[1] + 0.02, p[2])));
+  const mat = new THREE.LineBasicMaterial({ color });
+  const line = closed ? new THREE.LineLoop(g, mat) : new THREE.Line(g, mat);
+  scene.add(line);
+  return line;
+}
+
+const acceptsTaps = () => (mode === "two" ? taps.length < 2 : !roofClosed || phase === "obstacle");
+const show = (id, on) => { $(id).hidden = !on; };
+
+function refresh() {
+  if (tapLine) { scene.remove(tapLine); tapLine = null; }
+  if (obsLine) { scene.remove(obsLine); obsLine = null; }
+  ["o-close", "o-obs", "o-fin", "o-flat", "o-tilt"].forEach((id) => show(id, false));
+  if (mode === "two") {
+    if (taps.length === 2) return showDesign();
+    if (group) { scene.remove(group); group = null; }
+    $("hud-txt").innerHTML = taps.length ? "Now walk to corner B (blue) and tap" : "Put the ring on corner A (green) and tap";
+    return;
+  }
+  if (!roofClosed) {
+    if (group) { scene.remove(group); group = null; }
+    if (taps.length >= 2) tapLine = polyline(taps, 0xffffff);
+    show("o-close", taps.length >= 3);
+    const k = taps.length;
+    const what = k === 0 ? "corner A (green), one end of the sunny edge"
+               : k === 1 ? "corner B (blue), the other end of the sunny edge"
+               : "the next corner, going around the roof";
+    $("hud-txt").innerHTML = `Put the ring on ${what} and tap` +
+      (k >= 3 ? `<small>${k} corners · tap near A again or press Close roof to finish</small>`
+              : k ? `<small>${k} corner${k > 1 ? "s" : ""}</small>` : "");
+    return;
+  }
+  const ok = showLive();
+  if (phase === "obstacle") {
+    if (obsTaps.length >= 2) obsLine = polyline(obsTaps, COL.keep, obsTaps.length >= 3);
+    show("o-fin", obsTaps.length >= 2);
+    $("hud-txt").innerHTML = "Tap around the obstacle" +
+      `<small>${obsTaps.length} point${obsTaps.length === 1 ? "" : "s"} · 2 opposite corners = a box · then Finish obstacle</small>`;
+  } else if (ok) {
+    show("o-obs", true); show("o-flat", true); show("o-tilt", true);
   }
 }
 
-function afterTapsChanged() {
-  if (group && taps.length < need()) { scene.remove(group); group = null; }
-  $("o-flat").hidden = $("o-tilt").hidden = true;
-  redrawTapLine();
-  if (taps.length === need()) (mode === "four" ? showLive : showDesign)();
-  else prompt();
-}
+function clearMarks(list) { list.forEach((m) => scene.remove(m)); }
 
 function resetTaps() {
-  taps = [];
-  tapMarks.forEach((m) => scene.remove(m));
-  tapMarks = [];
-  afterTapsChanged();
+  clearMarks(tapMarks); clearMarks(roofMarks); clearMarks(obsMarks); obstacleMarks.forEach(clearMarks);
+  taps = []; tapMarks = []; roofMarks = []; obsMarks = []; obstacleMarks = []; obstacles = []; obsTaps = [];
+  roofClosed = false; phase = "roof";
+  if (group) { scene.remove(group); group = null; }
+  refresh();
 }
 
 function undoTap() {
-  if (!taps.length) return;
-  taps.pop();
-  scene.remove(tapMarks.pop());
-  afterTapsChanged();
+  if (mode === "two") { if (taps.length) { taps.pop(); scene.remove(tapMarks.pop()); } }
+  else if (phase === "obstacle") {
+    if (obsTaps.length) { obsTaps.pop(); scene.remove(obsMarks.pop()); } else phase = "done";
+  } else if (roofClosed && obstacles.length) { obstacles.pop(); clearMarks(obstacleMarks.pop()); }
+  else if (roofClosed) { roofClosed = false; phase = "roof"; }
+  else if (taps.length) { taps.pop(); scene.remove(roofMarks.pop()); }
+  refresh();
+}
+
+function closeRoof() {
+  if (taps.length < 3) return;
+  roofClosed = true; phase = "done";
+  refresh();
+}
+
+function startObstacle() { phase = "obstacle"; obsTaps = []; obsMarks = []; refresh(); }
+
+function finishObstacle() {
+  if (obsTaps.length < 2) return;
+  obstacles.push(obsTaps); obstacleMarks.push(obsMarks);
+  obsTaps = []; obsMarks = []; phase = "done";
+  refresh();
 }
 
 function onSelect() {
-  if (!reticle.visible || taps.length >= need()) return;
+  if (!reticle.visible || !acceptsTaps()) return;
   if (mode === "two" && !model) return;
-  const p = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
-  taps.push(p.toArray());
-  const color = taps.length === 1 ? COL.a : taps.length === 2 ? COL.b : COL.other;
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 16), new THREE.MeshBasicMaterial({ color }));
-  m.position.copy(p).y += 0.15;
-  scene.add(m); tapMarks.push(m);
-  afterTapsChanged();
+  const p = new THREE.Vector3().setFromMatrixPosition(reticle.matrix).toArray();
+  if (mode === "two") {
+    taps.push(p); tapMarks.push(mark(p, taps.length === 1 ? COL.a : COL.b));
+  } else if (!roofClosed) {
+    if (taps.length >= 3 && Math.hypot(p[0] - taps[0][0], p[2] - taps[0][2]) < CLOSE_DIST) return closeRoof();
+    taps.push(p); roofMarks.push(mark(p, taps.length === 1 ? COL.a : taps.length === 2 ? COL.b : COL.other));
+  } else {
+    obsTaps.push(p); obsMarks.push(mark(p, COL.keep));
+  }
+  refresh();
 }
 
 function setTilt(v) {
   liveTilt = v;
   $("o-flat").setAttribute("aria-pressed", String(!v));
   $("o-tilt").setAttribute("aria-pressed", String(v));
-  if (taps.length === 4) showLive();
+  if (roofClosed) refresh();
 }
 
 $("start").onclick = async () => {
@@ -423,10 +488,10 @@ $("start").onclick = async () => {
     if (frame && hitSource) {
       const hits = frame.getHitTestResults(hitSource);
       const pose = hits.length && hits[0].getPose(refSpace);
-      reticle.visible = !!pose && taps.length < need();
+      reticle.visible = !!pose && acceptsTaps();
       if (pose) {
         reticle.matrix.fromArray(pose.transform.matrix);
-        if (!found) { found = true; prompt(); }
+        if (!found) { found = true; refresh(); }
       }
     }
     renderer.render(scene, camera);
@@ -438,26 +503,44 @@ $("overlay").addEventListener("beforexrselect", (e) => { if (e.target.closest("b
 $("o-flat").onclick = () => setTilt(false);
 $("o-tilt").onclick = () => setTilt(true);
 $("o-undo").onclick = undoTap;
+$("o-close").onclick = closeRoof;
+$("o-obs").onclick = startObstacle;
+$("o-fin").onclick = finishObstacle;
 $("o-redo").onclick = resetTaps;
 $("o-exit").onclick = () => session && session.end();
 
-// Desktop check without AR: ar.html?simulate renders four fake taps from above
+// Desktop check without AR: open ar.html, then in the console
+// __solar.simulate(roofCorners, obstacles, tilt, eye) renders fake taps from above.
 window.__solar = {
-  simulate(corners = [[0, 0, 0], [10, 0, 0], [10, 0, -7], [0, 0, -7]], tilt = false, eye = [-4, 9, 8]) {
+  simulate(corners = [[0, 0, 0], [10, 0, 0], [10, 0, -7], [0, 0, -7]], obs = [], tilt = false, eye = [0, 18, 0.001]) {
     if (!renderer) buildScene();
-    mode = "four"; liveTilt = tilt;
+    setMode("four"); liveTilt = tilt;
     $("overlay").classList.add("on");
-    taps = corners.map((c) => c.slice());
-    showLive();
+    resetTaps();
+    taps = corners.map((c) => c.slice()); roofClosed = true; phase = "done";
+    obstacles = obs.map((o) => o.map((c) => c.slice())); obstacleMarks = obstacles.map(() => []);
+    refresh();
     renderer.domElement.style.cssText = "position:fixed;inset:0;z-index:0";
     renderer.setSize(innerWidth, innerHeight);
     camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 200);
-    const c = corners.reduce((a, p) => [a[0] + p[0] / 4, 0, a[2] + p[2] / 4], [0, 0, 0]);
+    const c = corners.reduce((a, p) => [a[0] + p[0] / corners.length, 0, a[2] + p[2] / corners.length], [0, 0, 0]);
     camera.position.set(c[0] + eye[0], eye[1], c[2] + eye[2]); camera.up.set(0, 0, -1); camera.lookAt(c[0], 0, c[2]);
     scene.background = new THREE.Color(0x8a9099);
-    const loop = () => renderer.render(scene, camera);
-    renderer.setAnimationLoop(loop);
+    renderer.setAnimationLoop(() => renderer.render(scene, camera));
     return $("hud-txt").textContent;
+  },
+  // drive the real tap handler: tap([x, y, z]) or press("o-obs")
+  tap(p) {
+    if (!renderer) buildScene();
+    reticle.visible = true; reticle.matrix.makeTranslation(p[0], p[1], p[2]);
+    onSelect();
+    return this.state();
+  },
+  press(id) { $(id).click(); return this.state(); },
+  state() {
+    return { taps: taps.length, roofClosed, phase, obstacles: obstacles.length, obsTaps: obsTaps.length,
+             buttons: ["o-close", "o-obs", "o-fin", "o-flat", "o-tilt"].filter((id) => !$(id).hidden),
+             hud: $("hud-txt").textContent };
   },
 };
 </script>
