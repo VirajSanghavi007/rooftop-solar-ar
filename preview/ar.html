@@ -125,6 +125,7 @@ svg.map { width: 100%; height: auto; display: block; }
     <button id="o-close" class="primary" hidden>Close roof</button>
     <button id="o-obs" hidden>Add obstacle</button>
     <button id="o-fin" class="primary" hidden>Finish obstacle</button>
+    <button id="o-sb" hidden>Setback 0.5 m</button>
     <button id="o-flat" aria-pressed="true" hidden>Flat</button>
     <button id="o-tilt" aria-pressed="false" hidden>Tilted 15°</button>
     <button id="o-undo">Undo</button>
@@ -316,10 +317,12 @@ function showLive() {
   const sides = sideLengths(L.roof).map((s) => s.toFixed(2)).join(" · ");
   const obsTxt = obstacles.length ? ` · ${obstacles.length} obstacle${obstacles.length > 1 ? "s" : ""}` : "";
   $("hud-txt").innerHTML = n
-    ? `${n} panels · ${kwp.toFixed(1)} kWp · ${liveTilt ? `tilted ${TILT}°` : "flat"}` +
+    ? `${n} panel${n === 1 ? "" : "s"} · ${kwp.toFixed(1)} kWp · ${liveTilt ? `tilted ${TILT}°` : "flat"}` +
       `<small>sides ${sides} m · roof ${area(L.roof).toFixed(1)} m² · ${L.orientation}${obsTxt}` +
       (liveTilt ? ` · row pitch ${L.rowPitch.toFixed(2)} m` : "") + `</small>`
-    : `No panel fits<small>sides ${sides} m · ${setback} m setback leaves too little room${obsTxt}</small>`;
+    : `No panel fits<small>your sides ${sides} m · one panel needs at least ` +
+      `${(PANEL.short + 2 * setback).toFixed(2)} × ${(PANEL.long + 2 * setback).toFixed(2)} m with a ${setback} m setback` +
+      (setback > 0 ? " · press Setback to lower it" : " · tap a bigger area") + `${obsTxt}</small>`;
   return true;
 }
 
@@ -372,7 +375,7 @@ const show = (id, on) => { $(id).hidden = !on; };
 function refresh() {
   if (tapLine) { scene.remove(tapLine); tapLine = null; }
   if (obsLine) { scene.remove(obsLine); obsLine = null; }
-  ["o-close", "o-obs", "o-fin", "o-flat", "o-tilt"].forEach((id) => show(id, false));
+  ["o-close", "o-obs", "o-fin", "o-sb", "o-flat", "o-tilt"].forEach((id) => show(id, false));
   if (mode === "two") {
     if (taps.length === 2) return showDesign();
     if (group) { scene.remove(group); group = null; }
@@ -399,8 +402,9 @@ function refresh() {
     $("hud-txt").innerHTML = "Tap around the obstacle" +
       `<small>${obsTaps.length} point${obsTaps.length === 1 ? "" : "s"} · 2 opposite corners = a box · then Finish obstacle</small>`;
   } else if (ok) {
-    show("o-obs", true); show("o-flat", true); show("o-tilt", true);
+    show("o-obs", true); show("o-sb", true); show("o-flat", true); show("o-tilt", true);
   }
+  $("o-sb").textContent = `Setback ${Math.max(0, parseFloat($("setback").value) || 0)} m`;
 }
 
 function clearMarks(list) { list.forEach((m) => scene.remove(m)); }
@@ -504,6 +508,14 @@ $("o-flat").onclick = () => setTilt(false);
 $("o-tilt").onclick = () => setTilt(true);
 $("o-undo").onclick = undoTap;
 $("o-close").onclick = closeRoof;
+// cycle the edge setback live: 0.5 -> 0.3 -> 0 -> 1 -> 0.5
+const SETBACKS = [0.5, 0.3, 0, 1];
+$("o-sb").onclick = () => {
+  const cur = parseFloat($("setback").value) || 0;
+  const i = SETBACKS.indexOf(cur);
+  $("setback").value = SETBACKS[(i + 1) % SETBACKS.length];
+  refresh();
+};
 $("o-obs").onclick = startObstacle;
 $("o-fin").onclick = finishObstacle;
 $("o-redo").onclick = resetTaps;
@@ -539,7 +551,7 @@ window.__solar = {
   press(id) { $(id).click(); return this.state(); },
   state() {
     return { taps: taps.length, roofClosed, phase, obstacles: obstacles.length, obsTaps: obsTaps.length,
-             buttons: ["o-close", "o-obs", "o-fin", "o-flat", "o-tilt"].filter((id) => !$(id).hidden),
+             buttons: ["o-close", "o-obs", "o-fin", "o-sb", "o-flat", "o-tilt"].filter((id) => !$(id).hidden),
              hud: $("hud-txt").textContent };
   },
 };
