@@ -67,6 +67,11 @@ svg.map { width: 100%; height: auto; display: block; }
               background: rgba(12, 18, 26, .8); color: #fff; }
 .bar button[aria-pressed="true"] { background: #1d3f8f; }
 .bar button.primary { background: #1f9d55; }
+.tiltbar { flex: 1 1 100%; display: flex; align-items: center; gap: 10px; background: rgba(12, 18, 26, .8);
+           color: #fff; border-radius: 8px; padding: 8px 12px; font: 600 .9rem var(--sans); }
+.tiltbar[hidden] { display: none; }
+.tiltbar output { min-width: 5.5em; font-family: var(--mono); font-weight: 500; }
+.tiltbar input { flex: 1; accent-color: #1f9d55; height: 28px; }
 .bar button[hidden] { display: none; }
 </style>
 </head>
@@ -87,7 +92,7 @@ svg.map { width: 100%; height: auto; display: block; }
     <p class="label">How it works</p>
     <ol>
       <li>Move the phone slowly until a ring sits on the roof surface.</li>
-      <li>Tap corner <span class="dot-a">A</span>, then corner <span class="dot-b">B</span>: two ends of the <b>sunny edge</b> (south side in India). Tilted panels face this edge.</li>
+      <li>Tap corner <span class="dot-a">A</span>, then corner <span class="dot-b">B</span>: two ends of the <b>sunny edge</b> (south side in India). Tilted panels face this edge; set the tilt (0° flat to 90°) with the slider in AR.</li>
       <li>Keep walking around the edge, tapping every corner in order (L-shapes and notches are fine). Finish by tapping near corner A again, or press <b>Close roof</b>. A plain 4-corner roof can be tapped in any order.</li>
       <li>Real-size panels (1.722 × 1.134 m, 400 W) fill the roof. A smaller roof gets fewer panels; the panels never shrink.</li>
       <li>Water tank, stair room, AC unit? Press <b>Add obstacle</b>, tap around it (or just two opposite corners for a box), then <b>Finish obstacle</b>. Panels keep the clearance away from it.</li>
@@ -126,8 +131,9 @@ svg.map { width: 100%; height: auto; display: block; }
     <button id="o-obs" hidden>Add obstacle</button>
     <button id="o-fin" class="primary" hidden>Finish obstacle</button>
     <button id="o-sb" hidden>Setback 0.5 m</button>
-    <button id="o-flat" aria-pressed="true" hidden>Flat</button>
-    <button id="o-tilt" aria-pressed="false" hidden>Tilted 15°</button>
+    <label class="tiltbar" id="o-tiltbar" hidden>Tilt
+      <input id="o-tilt" type="range" min="0" max="90" step="1" value="0" aria-label="Panel tilt in degrees">
+      <output id="o-tiltval">0° flat</output></label>
     <button id="o-undo">Undo</button>
     <button id="o-redo">Redo</button>
     <button id="o-exit">Exit</button>
@@ -141,10 +147,10 @@ import { solvePlacement } from "./placement.js";
 import { layoutRoof, sideLengths, area, winterSunAltitude, PANEL } from "./roofgrid.js";
 
 const MODELS = { tilted: "terrace_tilted_ar.glb", flat: "terrace_flat_ar.glb" };
-const TILT = 15, STANDOFF = 0.1, THICK = 0.035, FRAME_W = 0.03;
+const STANDOFF = 0.1, THICK = 0.035, FRAME_W = 0.03;
 const COL = { a: 0x1f9d55, b: 0x2563eb, other: 0xffffff, roof: 0xe5483f, keep: 0xf08c28 };
 const $ = (id) => document.getElementById(id);
-let mode = "four", layout = "tilted", anchor = null, model = null, liveTilt = false;
+let mode = "four", layout = "tilted", anchor = null, model = null, liveTilt = 0;   // panel tilt, degrees
 
 // ---------- page ----------
 function setMode(m) {
@@ -297,7 +303,7 @@ function showLive() {
   const sunAlt = winterSunAltitude(parseFloat($("lat").value) || 20);
   const setback = Math.max(0, parseFloat($("setback").value) || 0);
   const clearance = Math.max(0, parseFloat($("clear").value) || 0);
-  const tiltDeg = liveTilt ? TILT : 0;
+  const tiltDeg = liveTilt;
   let L;
   try {
     L = layoutRoof(flat(taps), { setback, tiltDeg, sunAltDeg: sunAlt, clearance, obstacles: obstacles.map(flat) });
@@ -317,7 +323,7 @@ function showLive() {
   const sides = sideLengths(L.roof).map((s) => s.toFixed(2)).join(" · ");
   const obsTxt = obstacles.length ? ` · ${obstacles.length} obstacle${obstacles.length > 1 ? "s" : ""}` : "";
   $("hud-txt").innerHTML = n
-    ? `${n} panel${n === 1 ? "" : "s"} · ${kwp.toFixed(1)} kWp · ${liveTilt ? `tilted ${TILT}°` : "flat"}` +
+    ? `${n} panel${n === 1 ? "" : "s"} · ${kwp.toFixed(1)} kWp · ${liveTilt ? `tilted ${liveTilt}°` : "flat"}` +
       `<small>sides ${sides} m · roof ${area(L.roof).toFixed(1)} m² · ${L.orientation}${obsTxt}` +
       (liveTilt ? ` · row pitch ${L.rowPitch.toFixed(2)} m` : "") + `</small>`
     : `No panel fits<small>your sides ${sides} m · one panel needs at least ` +
@@ -375,7 +381,7 @@ const show = (id, on) => { $(id).hidden = !on; };
 function refresh() {
   if (tapLine) { scene.remove(tapLine); tapLine = null; }
   if (obsLine) { scene.remove(obsLine); obsLine = null; }
-  ["o-close", "o-obs", "o-fin", "o-sb", "o-flat", "o-tilt"].forEach((id) => show(id, false));
+  ["o-close", "o-obs", "o-fin", "o-sb", "o-tiltbar"].forEach((id) => show(id, false));
   if (mode === "two") {
     if (taps.length === 2) return showDesign();
     if (group) { scene.remove(group); group = null; }
@@ -402,7 +408,7 @@ function refresh() {
     $("hud-txt").innerHTML = "Tap around the obstacle" +
       `<small>${obsTaps.length} point${obsTaps.length === 1 ? "" : "s"} · 2 opposite corners = a box · then Finish obstacle</small>`;
   } else if (ok) {
-    show("o-obs", true); show("o-sb", true); show("o-flat", true); show("o-tilt", true);
+    show("o-obs", true); show("o-sb", true); show("o-tiltbar", true);
   }
   $("o-sb").textContent = `Setback ${Math.max(0, parseFloat($("setback").value) || 0)} m`;
 }
@@ -457,11 +463,17 @@ function onSelect() {
   refresh();
 }
 
-function setTilt(v) {
-  liveTilt = v;
-  $("o-flat").setAttribute("aria-pressed", String(!v));
-  $("o-tilt").setAttribute("aria-pressed", String(v));
-  if (roofClosed) refresh();
+// Tilt slider 0-90 deg. The label follows the finger; the layout (tens of ms) reruns at most
+// every 150 ms while dragging and once on release. setTimeout, not requestAnimationFrame:
+// window rAF does not run during an immersive WebXR session.
+let tiltTimer = null;
+function setTilt(deg, now = false) {
+  liveTilt = Math.max(0, Math.min(90, Math.round(deg)));
+  $("o-tilt").value = liveTilt;
+  $("o-tiltval").textContent = liveTilt ? `${liveTilt}°` : "0° flat";
+  if (!roofClosed) return;
+  if (now) { clearTimeout(tiltTimer); tiltTimer = null; return refresh(); }
+  if (!tiltTimer) tiltTimer = setTimeout(() => { tiltTimer = null; refresh(); }, 150);
 }
 
 $("start").onclick = async () => {
@@ -503,9 +515,9 @@ $("start").onclick = async () => {
 };
 
 // taps on overlay buttons must not also count as a corner tap
-$("overlay").addEventListener("beforexrselect", (e) => { if (e.target.closest("button")) e.preventDefault(); });
-$("o-flat").onclick = () => setTilt(false);
-$("o-tilt").onclick = () => setTilt(true);
+$("overlay").addEventListener("beforexrselect", (e) => { if (e.target.closest("button, input, label")) e.preventDefault(); });
+$("o-tilt").addEventListener("input", (e) => setTilt(+e.target.value));
+$("o-tilt").addEventListener("change", (e) => setTilt(+e.target.value, true));
 $("o-undo").onclick = undoTap;
 $("o-close").onclick = closeRoof;
 // cycle the edge setback live: 0.5 -> 0.3 -> 0 -> 1 -> 0.5
@@ -526,7 +538,7 @@ $("o-exit").onclick = () => session && session.end();
 window.__solar = {
   simulate(corners = [[0, 0, 0], [10, 0, 0], [10, 0, -7], [0, 0, -7]], obs = [], tilt = false, eye = [0, 18, 0.001]) {
     if (!renderer) buildScene();
-    setMode("four"); liveTilt = tilt;
+    setMode("four"); setTilt(tilt === true ? 15 : +tilt || 0);
     $("overlay").classList.add("on");
     resetTaps();
     taps = corners.map((c) => c.slice()); roofClosed = true; phase = "done";
@@ -549,9 +561,10 @@ window.__solar = {
     return this.state();
   },
   press(id) { $(id).click(); return this.state(); },
+  slide(deg) { $("o-tilt").value = deg; $("o-tilt").dispatchEvent(new Event("input")); $("o-tilt").dispatchEvent(new Event("change")); return deg; },
   state() {
     return { taps: taps.length, roofClosed, phase, obstacles: obstacles.length, obsTaps: obsTaps.length,
-             buttons: ["o-close", "o-obs", "o-fin", "o-sb", "o-flat", "o-tilt"].filter((id) => !$(id).hidden),
+             buttons: ["o-close", "o-obs", "o-fin", "o-sb", "o-tiltbar"].filter((id) => !$(id).hidden),
              hud: $("hud-txt").textContent };
   },
 };

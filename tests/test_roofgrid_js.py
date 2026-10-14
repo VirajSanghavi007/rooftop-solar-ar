@@ -114,3 +114,19 @@ def test_crossing_edges_rejected(node_available):
         run("G.layoutRoof([[0,0],[10,0],[0,8],[10,8],[5,12]])")     # bow-tie 5-gon
     assert run("G.isSimple([[0,0],[10,0],[10,8],[0,8]])") is True
     assert run("G.pointInPolygon([[0,0],[12,0],[12,5],[6,5],[6,10],[0,10]], [9,8])") is False
+
+
+def test_tilt_full_range_0_to_90(node_available):
+    roof = "[[0,0],[14,0],[14,12],[0,12]]"
+    alt = 46.56
+    res = {d: run(f"(() => {{ const L = G.layoutRoof({roof}, {{tiltDeg: {d}, sunAltDeg: {alt}}}); "
+                  f"return [L.panels.length, L.rowPitch, L.depth] }})()") for d in (0, 30, 60, 90)}
+    for d, (n, pitch, depth) in res.items():
+        assert n > 0 and pitch > 0
+        if d:   # rows spaced so a row's top edge shadow ends at the next row
+            foot = depth * math.cos(math.radians(d))
+            assert pitch == pytest.approx(foot + depth * math.sin(math.radians(d)) / math.tan(math.radians(alt)))
+    # a gentle tilt costs rows vs flat; at 90 deg the footprint is ~0, so the pitch is just the
+    # winter-noon shadow of an upright panel: height / tan(sun altitude)
+    assert res[0][0] > res[30][0]
+    assert res[90][1] == pytest.approx(res[90][2] / math.tan(math.radians(alt)))

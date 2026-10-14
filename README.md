@@ -63,6 +63,6 @@ ETH3D terrace dense cloud: `colmap image_undistorter` on `dslr_calibration_jpg` 
 - Live layout (default mode of `ar.html`): tap A and B along the sunny edge, then every other roof corner in
   order (any count, concave/L-shapes fine; close by tapping near A or "Close roof"). "Add obstacle": tap around
   a tank/stair room (2 taps = box), panels keep the clearance (default 0.3 m) from it. `preview/roofgrid.js` checks each candidate panel (inside the roof, >= setback from its edges, >= clearance from obstacles) and fills the roof with real-size
-  panels (1.722 x 1.134 m, never scaled; count follows the roof), flat or tilted 15 deg with winter-shadow row
+  panels (1.722 x 1.134 m, never scaled; count follows the roof), tilt slider 0-90 deg with winter-shadow row
   gaps from the latitude. HUD shows panel count, kWp, measured side lengths and area.
   Desktop check without a phone: open `ar.html` and run `__solar.simulate(corners, obstacles)` in the console; `__solar.tap([x,y,z])` / `press(id)` drive the tap flow.
