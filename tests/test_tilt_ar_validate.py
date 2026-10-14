@@ -256,3 +256,40 @@ def test_ar_glb_excludes_roof(tmp_path):
     corners = P.panel_corners_3d(FLAT, [box(0, 0, 1.7, 1.1)])
     j, _ = _gltf_json(A.write_glb(tmp_path / "a.glb", FLAT, box(-1, -1, 3, 3), corners, include_roof=False))
     assert {m["name"] for m in j["materials"]} == {"frame", "glass"}
+
+
+# ---------- corner-tap anchor ----------
+
+def test_anchor_points_long_edge_of_rotated_rect():
+    from shapely import affinity
+    poly = affinity.rotate(box(0, 0, 12, 5), 30, origin=(0, 0))
+    a, b = A.anchor_points(poly)
+    assert np.linalg.norm(b - a) == pytest.approx(12, abs=1e-6)
+    d = (b - a) / 12
+    assert abs(abs(d @ [np.cos(np.radians(30)), np.sin(np.radians(30))]) - 1) < 1e-6
+
+
+def test_anchor_points_snap_to_outline_vertex():
+    # chamfered corners: no rectangle corner is a real roof vertex
+    poly = Polygon([(0.5, 0), (9.5, 0), (10, 0.5), (10, 5.5), (9.5, 6), (0.5, 6), (0, 5.5), (0, 0.5)])
+    verts = {tuple(v) for v in np.asarray(poly.exterior.coords)}
+    a, b = A.anchor_points(poly)
+    assert tuple(a) in verts and tuple(b) in verts
+    assert abs(a[0] - b[0]) >= 9                              # still spans the long side
+
+
+def test_anchor_data_in_glb_frame(tmp_path):
+    frame = PlaneFrame(np.array([5.0, 5, 2]), FLAT.u, FLAT.v, FLAT.n)
+    outline, keep = box(0, 0, 10, 4), box(2, 1, 3, 2)
+    d = A.anchor_data(frame, outline, keep)
+    assert d["anchor_length_m"] == pytest.approx(10)
+    for p in (d["anchor_a"], d["anchor_b"]):
+        assert p[1] == pytest.approx(0)                  # on the roof plane (glTF y up)
+    # glTF frame: x = u, z = -v ; outline v in [0,4] -> z in [-4,0]
+    ring = np.array(d["outline"][0])
+    assert ring[:, 0].min() == pytest.approx(0) and ring[:, 0].max() == pytest.approx(10)
+    assert ring[:, 2].min() == pytest.approx(-4) and ring[:, 2].max() == pytest.approx(0)
+    assert len(d["keepouts"]) == 1
+    import json as _json
+    path = A.write_anchor(tmp_path / "a.json", frame, outline, None)
+    assert _json.loads(path.read_text())["keepouts"] == []

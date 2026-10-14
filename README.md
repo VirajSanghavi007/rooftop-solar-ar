@@ -56,3 +56,7 @@ ETH3D terrace dense cloud: `colmap image_undistorter` on `dslr_calibration_jpg` 
   `panels_ar.glb` (AR: panels only, no roof slab) into `preview/`, push; the Pages workflow republishes.
 - Panels are generated, not downloaded: aluminium frame + glass with a 120 half-cut cell texture, at the
   exact layout size. AR offers life size (outdoors) or tabletop 1:20.
+- Corner-tap placement (`preview/ar.html`, WebXR + three.js, Android Chrome): tap real roof corner A, then B
+  (long edge of the outline, shown on a map); the design snaps onto them with outline and keep-outs drawn.
+  "True size" keeps metres and reports tapped vs design edge length; "Fit to taps" scales to the taps
+  (demo on any open space). Anchor data: `outputs/<site>/panels_anchor.json` -> `preview/terrace_anchor.json`.

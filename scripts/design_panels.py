@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from inspect_cloud import find_fused  # noqa: E402
 from rooftop import layout as L  # noqa: E402
 from rooftop import panels as P  # noqa: E402
-from rooftop.ar_export import write_glb  # noqa: E402
+from rooftop.ar_export import write_anchor, write_glb  # noqa: E402
 from rooftop.cloud import clean_cloud, extract_planes, split_clusters  # noqa: E402
 from rooftop.geometry import PlaneFrame, estimate_up, level_transform, read_camera_centres  # noqa: E402
 
@@ -125,6 +125,7 @@ def run(site, unit_scale=1.0, voxel=0.05, roof_index=None, select="largest", max
         "step": P.export_step(out / "roof_panels.step", frame, outline, corners, obstacles),
         "glb": write_glb(out / "roof_panels.glb", frame, outline, corners),
         "glb_ar": write_glb(out / "panels_ar.glb", frame, outline, corners, include_roof=False),
+        "anchor": write_anchor(out / "panels_anchor.json", frame, outline, obstacles),
     }
     summary = {
         "site": site, "roof_index": idx, "roof_tilt_deg": round(frame.tilt_deg(), 2),

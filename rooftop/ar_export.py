@@ -211,3 +211,44 @@ def write_glb(path, frame, outline, panel_corners, panel_thickness=0.035, includ
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(glb_bytes(parts, _materials()))
     return path
+
+
+def _gltf_ring(frame, ring2d):
+    """2D roof-plane ring -> list of [x, y, z] in the glTF frame (y-up, origin at roof origin)."""
+    p = (frame.to_3d(np.asarray(ring2d, float)) - frame.origin) @ Z_TO_Y.T
+    return np.round(p, 4).tolist()
+
+
+def anchor_points(outline):
+    """Two reference corners for tap placement: the long edge of the outline's
+    minimum rotated rectangle, snapped to the nearest real outline vertex
+    (a corner the user can actually stand on), as 2D roof-plane points (A, B)."""
+    rect = np.asarray(outline.minimum_rotated_rectangle.exterior.coords)[:4]
+    edges = [(rect[i], rect[(i + 1) % 4]) for i in range(4)]
+    verts = np.asarray(outline.exterior.coords)
+    snap = lambda p: verts[np.argmin(np.linalg.norm(verts - p, axis=1))]
+    longest = max(np.linalg.norm(b - a) for a, b in edges)
+    # of the two long sides, keep the one whose rectangle corners lie closest to real vertices
+    long_sides = [(a, b) for a, b in edges if np.linalg.norm(b - a) > longest * (1 - 1e-9)]
+    a, b = min(long_sides, key=lambda e: sum(np.linalg.norm(snap(p) - p) for p in e))
+    return snap(a), snap(b)
+
+
+def anchor_data(frame, outline, obstacles=None):
+    """Data the AR page needs to place the design from two tapped corners."""
+    a, b = anchor_points(outline)
+    rings = lambda g: [] if g is None or g.is_empty else [
+        _gltf_ring(frame, np.asarray(p.exterior.coords))
+        for p in getattr(g, "geoms", [g])]
+    pa, pb = _gltf_ring(frame, [a, b])
+    return {"units": "m", "frame": "glTF y-up, origin = roof-plane origin",
+            "anchor_a": pa, "anchor_b": pb,
+            "anchor_length_m": round(float(np.linalg.norm(b - a)), 3),
+            "outline": rings(outline), "keepouts": rings(obstacles)}
+
+
+def write_anchor(path, frame, outline, obstacles=None):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(anchor_data(frame, outline, obstacles)))
+    return path

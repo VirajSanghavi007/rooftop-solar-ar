@@ -1,4 +1,5 @@
 """Smoke test: run_preview.bat serves the preview page and both models."""
+import json
 import os
 import socket
 import subprocess
@@ -39,5 +40,11 @@ def test_run_preview_bat_serves_page_and_models():
         for name in ("terrace_tilted.glb", "terrace_flat.glb", "terrace_tilted_ar.glb", "terrace_flat_ar.glb"):
             assert name in html
             assert urllib.request.urlopen(base + name, timeout=2).read()[:4] == b"glTF"
+        assert 'href="ar.html"' in html
+        ar = urllib.request.urlopen(base + "ar.html", timeout=2).read().decode()
+        assert "<title>Roof Corner Placement</title>" in ar and "terrace_anchor.json" in ar
+        assert "solvePlacement" in urllib.request.urlopen(base + "placement.js", timeout=2).read().decode()
+        anchor = json.loads(urllib.request.urlopen(base + "terrace_anchor.json", timeout=2).read())
+        assert anchor["anchor_length_m"] > 5 and len(anchor["outline"][0]) > 3
     finally:
         subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)

@@ -48,6 +48,8 @@ def test_design_panels_smoke_synthetic(tmp_path, monkeypatch):
     for f in s["files"].values():
         assert Path(f).stat().st_size > 0
     assert json.loads((tmp_path / "outputs/synth/panels_summary.json").read_text())["panels"] == s["panels"]
+    anchor = json.loads((tmp_path / "outputs/synth/panels_anchor.json").read_text())
+    assert anchor["anchor_length_m"] == pytest.approx(12, rel=0.05)   # long edge of the 12 x 8 roof
 
 
 TERRACE = ROOT / "data" / "eth3d" / "terrace" / "mvs" / "scene_dense.ply"
