@@ -143,8 +143,8 @@ svg.map { width: 100%; height: auto; display: block; }
 <script type="module">
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { solvePlacement } from "./placement.js";
-import { layoutRoof, sideLengths, area, winterSunAltitude, PANEL } from "./roofgrid.js";
+import { solvePlacement } from "./placement.js?v=9";
+import { layoutRoof, sideLengths, area, winterSunAltitude, PANEL } from "./roofgrid.js?v=9";
 
 const MODELS = { tilted: "terrace_tilted_ar.glb", flat: "terrace_flat_ar.glb" };
 const STANDOFF = 0.1, THICK = 0.035, FRAME_W = 0.03;
@@ -226,6 +226,8 @@ function buildScene() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
   renderer.shadowMap.enabled = true;
+  renderer.shadowMap.autoUpdate = false;        // the sun never moves: redraw shadows only when the layout changes
+  renderer.xr.setFramebufferScaleFactor(0.8);   // lighter GPU load keeps tracking smooth on phones
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   document.body.appendChild(renderer.domElement);
   scene = new THREE.Scene();
@@ -319,6 +321,7 @@ function showLive() {
                           Math.max(...xs) - Math.min(...xs) + 4, Math.max(...zs) - Math.min(...zs) + 4));
   group.add(panelMeshes(L, y0, tiltDeg));
   scene.add(group);
+  renderer.shadowMap.needsUpdate = true;
   const n = L.panels.length, kwp = (n * PANEL.watts) / 1000;
   const sides = sideLengths(L.roof).map((s) => s.toFixed(2)).join(" · ");
   const obsTxt = obstacles.length ? ` · ${obstacles.length} obstacle${obstacles.length > 1 ? "s" : ""}` : "";
@@ -348,6 +351,7 @@ function showDesign() {
   inner.position.fromArray(pl.position);
   group.add(inner);
   scene.add(group);
+  renderer.shadowMap.needsUpdate = true;
   const sign = pl.errorPct >= 0 ? "+" : "";
   $("hud-txt").innerHTML = "Scanned design placed at true size" +
     `<small>tapped ${pl.tappedLength.toFixed(2)} m · design ${pl.designLength.toFixed(2)} m · ${sign}${pl.errorPct.toFixed(1)} %</small>`;
@@ -448,8 +452,14 @@ function finishObstacle() {
   refresh();
 }
 
+let lastHitAt = 0;
+const HIT_GRACE_MS = 500;
 function onSelect() {
-  if (!reticle.visible || !acceptsTaps()) return;
+  if (!acceptsTaps()) return;
+  if (performance.now() - lastHitAt > HIT_GRACE_MS) {
+    $("hud-txt").innerHTML = "No surface under the ring yet<small>aim at the floor 1 to 2 m ahead and move the phone slowly sideways</small>";
+    return;
+  }
   if (mode === "two" && !model) return;
   const p = new THREE.Vector3().setFromMatrixPosition(reticle.matrix).toArray();
   if (mode === "two") {
@@ -491,7 +501,13 @@ $("start").onclick = async () => {
   await renderer.xr.setSession(session);
   refSpace = renderer.xr.getReferenceSpace();
   const viewer = await session.requestReferenceSpace("viewer");
-  hitSource = await session.requestHitTestSource({ space: viewer });
+  // planes AND feature points: points give a hit within a second or two on surfaces where
+  // Chrome would otherwise wait a long time to confirm a whole plane
+  try {
+    hitSource = await session.requestHitTestSource({ space: viewer, entityTypes: ["plane", "point"] });
+  } catch (e) {
+    hitSource = await session.requestHitTestSource({ space: viewer });
+  }
   session.addEventListener("select", onSelect);
   session.addEventListener("end", () => {
     $("overlay").classList.remove("on");
@@ -499,15 +515,24 @@ $("start").onclick = async () => {
   });
   resetTaps();
   let found = false;
-  $("hud-txt").textContent = "Move the phone slowly to find the surface";
+  const startedAt = performance.now();
+  let hinted = false;
+  $("hud-txt").innerHTML = "Move the phone slowly to find the surface<small>aim at the floor 1 to 2 m ahead</small>";
   renderer.setAnimationLoop((t, frame) => {
     if (frame && hitSource) {
       const hits = frame.getHitTestResults(hitSource);
       const pose = hits.length && hits[0].getPose(refSpace);
-      reticle.visible = !!pose && acceptsTaps();
       if (pose) {
+        lastHitAt = performance.now();
         reticle.matrix.fromArray(pose.transform.matrix);
         if (!found) { found = true; refresh(); }
+      }
+      // keep the ring up through brief tracking dropouts so taps are not lost
+      reticle.visible = acceptsTaps() && performance.now() - lastHitAt < HIT_GRACE_MS;
+      if (!found && !hinted && performance.now() - startedAt > 8000) {
+        hinted = true;
+        $("hud-txt").innerHTML = "Still looking for the surface" +
+          "<small>move sideways, not just tilting · needs light and some texture · plain shiny tiles are hard: aim at an edge, mat or crack</small>";
       }
     }
     renderer.render(scene, camera);
@@ -556,12 +581,13 @@ window.__solar = {
   // drive the real tap handler: tap([x, y, z]) or press("o-obs")
   tap(p) {
     if (!renderer) buildScene();
-    reticle.visible = true; reticle.matrix.makeTranslation(p[0], p[1], p[2]);
+    reticle.visible = true; reticle.matrix.makeTranslation(p[0], p[1], p[2]); lastHitAt = performance.now();
     onSelect();
     return this.state();
   },
   press(id) { $(id).click(); return this.state(); },
   slide(deg) { $("o-tilt").value = deg; $("o-tilt").dispatchEvent(new Event("input")); $("o-tilt").dispatchEvent(new Event("change")); return deg; },
+  tapNoSurface() { lastHitAt = 0; onSelect(); return this.state(); },
   state() {
     return { taps: taps.length, roofClosed, phase, obstacles: obstacles.length, obsTaps: obsTaps.length,
              buttons: ["o-close", "o-obs", "o-fin", "o-sb", "o-tiltbar"].filter((id) => !$(id).hidden),
