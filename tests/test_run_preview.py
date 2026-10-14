@@ -44,6 +44,8 @@ def test_run_preview_bat_serves_page_and_models():
         ar = urllib.request.urlopen(base + "ar.html", timeout=2).read().decode()
         assert "<title>Roof Corner Placement</title>" in ar and "terrace_anchor.json" in ar
         assert "solvePlacement" in urllib.request.urlopen(base + "placement.js", timeout=2).read().decode()
+        assert "layoutRoof" in urllib.request.urlopen(base + "roofgrid.js", timeout=2).read().decode()
+        assert urllib.request.urlopen(base + "panel_cells.png", timeout=2).read()[1:4] == b"PNG"
         anchor = json.loads(urllib.request.urlopen(base + "terrace_anchor.json", timeout=2).read())
         assert anchor["anchor_length_m"] > 5 and len(anchor["outline"][0]) > 3
     finally:

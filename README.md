@@ -60,3 +60,8 @@ ETH3D terrace dense cloud: `colmap image_undistorter` on `dslr_calibration_jpg` 
   (long edge of the outline, shown on a map); the design snaps onto them with outline and keep-outs drawn.
   "True size" keeps metres and reports tapped vs design edge length; "Fit to taps" scales to the taps
   (demo on any open space). Anchor data: `outputs/<site>/panels_anchor.json` -> `preview/terrace_anchor.json`.
+- 4-corner live layout (default mode of `ar.html`): tap A and B along the sunny edge, then the other two
+  corners. `preview/roofgrid.js` orders the taps, insets by the setback, and fills the roof with real-size
+  panels (1.722 x 1.134 m, never scaled; count follows the roof), flat or tilted 15 deg with winter-shadow row
+  gaps from the latitude. HUD shows panel count, kWp, measured side lengths and area.
+  Desktop check without a phone: open `ar.html` and run `__solar.simulate()` in the console.

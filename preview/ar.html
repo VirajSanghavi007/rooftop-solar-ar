@@ -30,16 +30,24 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--sans); }
 .wrap { max-width: 640px; margin: 0 auto; padding: 20px 16px 28px; display: flex; flex-direction: column; gap: 16px; }
 h1 { font-size: 1.4rem; font-weight: 600; margin: 0; }
 a { color: var(--accent); }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px;
+        display: flex; flex-direction: column; gap: 12px; }
+.card[hidden] { display: none; }
 ol { margin: 0; padding-left: 20px; }
 li + li { margin-top: 4px; }
 .seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { border: 0; background: var(--surface); color: var(--fg); font: 500 .9rem var(--sans); padding: 9px; cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+.seg button:focus-visible, .go:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .go { border: 0; border-radius: 8px; background: var(--accent); color: var(--accent-fg); font: 600 1rem var(--sans); padding: 13px; cursor: pointer; width: 100%; }
 .go:disabled { opacity: .45; cursor: not-allowed; }
 .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 6px; }
 .note { color: var(--muted); font-size: .85rem; margin: 0; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+label.f { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--muted); }
+label.f input { font: 500 1rem var(--mono); padding: 8px; border: 1px solid var(--line); border-radius: 8px;
+                background: var(--bg); color: var(--fg); min-width: 0; }
+.link { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; font-size: .85rem; cursor: pointer; text-align: left; }
 svg.map { width: 100%; height: auto; display: block; }
 .dot-a { color: var(--a); font-weight: 600; } .dot-b { color: var(--b); font-weight: 600; }
 
@@ -47,59 +55,73 @@ svg.map { width: 100%; height: auto; display: block; }
 #overlay { display: none; position: fixed; inset: 0; pointer-events: none; font-family: var(--sans); }
 #overlay.on { display: block; }
 .hud { position: absolute; left: 12px; right: 12px; top: max(12px, env(safe-area-inset-top));
-       background: rgba(12, 18, 26, .78); color: #fff; border-radius: 10px; padding: 10px 12px;
+       background: rgba(12, 18, 26, .8); color: #fff; border-radius: 10px; padding: 10px 12px;
        display: flex; gap: 10px; align-items: center; pointer-events: auto; }
 .hud .txt { flex: 1; font-size: .95rem; }
-.hud .txt small { display: block; color: #b9c4d0; font-family: var(--mono); font-size: .8rem; }
+.hud .txt small { display: block; color: #b9c4d0; font-family: var(--mono); font-size: .78rem; }
 .hud svg { width: 84px; height: auto; flex: none; }
+.hud svg[hidden] { display: none; }
 .bar { position: absolute; left: 12px; right: 12px; bottom: max(16px, env(safe-area-inset-bottom));
        display: flex; gap: 8px; pointer-events: auto; }
 .bar button { flex: 1; border: 0; border-radius: 8px; padding: 12px 6px; font: 600 .9rem var(--sans);
-              background: rgba(12, 18, 26, .78); color: #fff; }
+              background: rgba(12, 18, 26, .8); color: #fff; }
 .bar button[aria-pressed="true"] { background: #1d3f8f; }
 .bar button[hidden] { display: none; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Place the design on a real roof</h1>
+  <h1>Solar panels on a real roof</h1>
   <p class="note"><a href="./">Back to the 3D preview</a></p>
 
   <div class="card">
+    <div class="seg" role="group" aria-label="Mode">
+      <button id="m-four" aria-pressed="true">Your roof · 4 corners</button>
+      <button id="m-two" aria-pressed="false">Scanned design · 2 corners</button>
+    </div>
+  </div>
+
+  <!-- 4-corner mode: measure the real roof, lay out real-size panels live -->
+  <div class="card" id="c-four">
+    <p class="label">How it works</p>
+    <ol>
+      <li>Move the phone slowly until a ring sits on the roof surface.</li>
+      <li>Tap corner <span class="dot-a">A</span>, then corner <span class="dot-b">B</span>: two ends of the <b>sunny edge</b> (south side in India). Tilted panels face this edge.</li>
+      <li>Tap the other two corners, in any order.</li>
+      <li>Real-size panels (1.722 × 1.134 m, 400 W) fill the roof. A smaller roof gets fewer panels; the panels never shrink.</li>
+    </ol>
+    <div class="row">
+      <label class="f">Edge setback (m)<input id="setback" type="number" inputmode="decimal" min="0" max="3" step="0.1" value="0.5"></label>
+      <label class="f">Latitude (°)<input id="lat" type="number" inputmode="decimal" min="-66" max="66" step="0.1" value="20"></label>
+    </div>
+    <button class="link" id="geo">Use my location for latitude</button>
+    <p class="note">Latitude sets the winter-noon sun height, which sets the gap between tilted rows so they don't shade each other.</p>
+  </div>
+
+  <!-- 2-corner mode: place the saved ETH3D design -->
+  <div class="card" id="c-two" hidden>
     <p class="label">Which two corners to tap</p>
     <svg class="map" id="map" role="img" aria-label="Roof outline with corner A and corner B"></svg>
     <p class="note" id="map-note">Loading roof outline…</p>
+    <div class="seg" role="group" aria-label="Panel layout">
+      <button id="b-tilted" aria-pressed="true">Tilted 15°</button>
+      <button id="b-flat" aria-pressed="false">Flat</button>
+    </div>
+    <p class="note">Places the design made from the ETH3D terrace scan at true size. Tap corner A, then B; the app reports the tapped edge length against the design.</p>
   </div>
 
   <div class="card">
-    <p class="label">How it works</p>
-    <ol>
-      <li>Stand on the roof. Move the phone slowly until a ring sits on the surface.</li>
-      <li>Put the ring on the real corner <span class="dot-a">A</span> and tap the screen.</li>
-      <li>Walk to corner <span class="dot-b">B</span> along the long edge and tap again.</li>
-      <li>The panels, roof outline (red) and keep-out zones (orange) snap into place.</li>
-    </ol>
-  </div>
-
-  <div class="card" style="display:flex;flex-direction:column;gap:12px">
-    <div>
-      <p class="label">Layout</p>
-      <div class="seg" role="group" aria-label="Panel layout">
-        <button id="b-tilted" aria-pressed="true">Tilted 15°</button>
-        <button id="b-flat" aria-pressed="false">Flat</button>
-      </div>
-    </div>
     <button class="go" id="start" disabled>Start AR</button>
     <p class="note" id="status">Checking whether this device supports AR…</p>
-    <p class="note">Not on this roof? Use <b>Fit to taps</b> after placing: it scales the design to the two points you tapped, so any open space (a terrace, a car park) works as a stand-in.</p>
   </div>
 </div>
 
 <div id="overlay">
-  <div class="hud"><div class="txt" id="hud-txt">Move the phone slowly to find the surface</div><svg id="hud-map"></svg></div>
+  <div class="hud"><div class="txt" id="hud-txt">Move the phone slowly to find the surface</div><svg id="hud-map" hidden></svg></div>
   <div class="bar">
-    <button id="o-true" aria-pressed="true" hidden>True size</button>
-    <button id="o-fit" aria-pressed="false" hidden>Fit to taps</button>
+    <button id="o-flat" aria-pressed="true" hidden>Flat</button>
+    <button id="o-tilt" aria-pressed="false" hidden>Tilted 15°</button>
+    <button id="o-undo">Undo</button>
     <button id="o-redo">Redo</button>
     <button id="o-exit">Exit</button>
   </div>
@@ -109,12 +131,33 @@ svg.map { width: 100%; height: auto; display: block; }
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { solvePlacement } from "./placement.js";
+import { layoutRoof, sideLengths, area, winterSunAltitude, PANEL } from "./roofgrid.js";
 
 const MODELS = { tilted: "terrace_tilted_ar.glb", flat: "terrace_flat_ar.glb" };
+const TILT = 15, STANDOFF = 0.1, THICK = 0.035, FRAME_W = 0.03;
+const COL = { a: 0x1f9d55, b: 0x2563eb, other: 0xffffff, roof: 0xe5483f, keep: 0xf08c28 };
 const $ = (id) => document.getElementById(id);
-let layout = "tilted", anchor = null, model = null, fit = false;
+let mode = "four", layout = "tilted", anchor = null, model = null, liveTilt = false;
 
-// ---------- page: map + layout choice ----------
+// ---------- page ----------
+function setMode(m) {
+  mode = m;
+  $("m-four").setAttribute("aria-pressed", String(m === "four"));
+  $("m-two").setAttribute("aria-pressed", String(m === "two"));
+  $("c-four").hidden = m !== "four";
+  $("c-two").hidden = m !== "two";
+  $("hud-map").hidden = m !== "two";
+}
+$("m-four").onclick = () => setMode("four");
+$("m-two").onclick = () => setMode("two");
+
+$("geo").onclick = () => {
+  if (!navigator.geolocation) { $("geo").textContent = "Location not available, type the latitude"; return; }
+  navigator.geolocation.getCurrentPosition(
+    (p) => { $("lat").value = p.coords.latitude.toFixed(1); $("geo").textContent = "Latitude set from your location"; },
+    () => { $("geo").textContent = "Location refused, type the latitude"; });
+};
+
 function drawMap(svg, small) {
   const ring = anchor.outline[0];
   const xs = ring.map((p) => p[0]), zs = ring.map((p) => p[2]);
@@ -148,21 +191,21 @@ fetch("terrace_anchor.json").then((r) => r.json()).then((d) => {
   anchor = d;
   drawMap($("map"), false);
   drawMap($("hud-map"), true);
-  $("map-note").textContent = `Corner A to corner B is the roof's long edge: ${d.anchor_length_m.toFixed(1)} m in the design.`;
-  checkSupport();
+  $("map-note").textContent = `Corner A to corner B is the scanned roof's long edge: ${d.anchor_length_m.toFixed(1)} m.`;
 });
 
-async function checkSupport() {
+(async () => {
   const ok = navigator.xr && await navigator.xr.isSessionSupported("immersive-ar").catch(() => false);
   $("start").disabled = !ok;
   $("status").textContent = ok
-    ? "Ready. Go outside or onto the roof, then press Start AR."
-    : "AR needs Chrome on an Android phone with Google Play Services for AR, opened over https or localhost. iPhone Safari has no WebXR yet.";
-}
+    ? "Ready. Go onto the roof (or any open flat space), then press Start AR."
+    : "AR needs Chrome on an Android phone with Google Play Services for AR. iPhone Safari has no WebXR yet.";
+})();
 
-// ---------- AR session ----------
-let renderer, scene, camera, reticle, group, shadow, session, hitSource, refSpace;
+// ---------- AR scene ----------
+let renderer, scene, camera, reticle, group, session, hitSource, refSpace, tapLine;
 let taps = [], tapMarks = [];
+const panelMat = { frame: null, glass: null };
 
 function buildScene() {
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -186,72 +229,178 @@ function buildScene() {
   reticle.matrixAutoUpdate = false;
   reticle.visible = false;
   scene.add(reticle);
+  const tex = new THREE.TextureLoader().load("panel_cells.png");
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  panelMat.frame = new THREE.MeshStandardMaterial({ color: 0xc7ccd4, metalness: 0.6, roughness: 0.35 });
+  panelMat.glass = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.15, metalness: 0.0 });
 }
 
-function lineLoop(ring, color, lift) {
-  const g = new THREE.BufferGeometry().setFromPoints(ring.map((p) => new THREE.Vector3(p[0], p[1] + lift, p[2])));
-  return new THREE.LineLoop(g, new THREE.LineBasicMaterial({ color }));
+const v3 = (p, y) => new THREE.Vector3(p[0], y, p[1]);
+
+function lineLoop(points, color) {
+  return new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color }));
 }
 
-function placeDesign() {
+function shadowCatcher(cx, y, cz, w, d) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.ShadowMaterial({ opacity: 0.3 }));
+  m.position.set(cx, y, cz);
+  m.receiveShadow = true;
+  return m;
+}
+
+// Real-size panels (instanced frame body + textured glass) from a roofgrid layout.
+function panelMeshes(L, y0, tiltDeg) {
+  const n = L.panels.length, out = new THREE.Group();
+  if (!n) return out;
+  const { width, depth } = L.panels[0];
+  const frameGeo = new THREE.BoxGeometry(width, THICK, depth);
+  const glassGeo = new THREE.PlaneGeometry(width - 2 * FRAME_W, depth - 2 * FRAME_W).rotateX(-Math.PI / 2)
+                     .translate(0, THICK / 2 + 0.002, 0);
+  if (depth > width) {                       // portrait: cell texture's long side follows z
+    const uv = glassGeo.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getY(i), uv.getX(i));
+  }
+  const frames = new THREE.InstancedMesh(frameGeo, panelMat.frame, n);
+  const glass = new THREE.InstancedMesh(glassGeo, panelMat.glass, n);
+  frames.castShadow = true;
+  const t = (tiltDeg * Math.PI) / 180;
+  const u = new THREE.Vector3(L.u[0], 0, L.u[1]), v = new THREE.Vector3(L.v[0], 0, L.v[1]);
+  // panel slope direction: away from edge A-B and up, so the glass faces the A-B (sunny) edge
+  const d = v.clone().multiplyScalar(Math.cos(t)).add(new THREE.Vector3(0, Math.sin(t), 0));
+  let x = u.clone(), nrm = new THREE.Vector3().crossVectors(d, x);
+  if (nrm.y < 0) { x.negate(); nrm.negate(); }
+  const m = new THREE.Matrix4();
+  L.panels.forEach((p, i) => {
+    const low = L.toXZ([p.s + p.width / 2, p.t]);
+    const c = new THREE.Vector3(low[0], y0 + STANDOFF, low[1]).addScaledVector(d, depth / 2).addScaledVector(nrm, THICK / 2);
+    m.makeBasis(x, nrm, d).setPosition(c);
+    frames.setMatrixAt(i, m);
+    glass.setMatrixAt(i, m);
+  });
+  out.add(frames, glass);
+  return out;
+}
+
+function showLive() {
   if (group) scene.remove(group);
-  const pl = solvePlacement(anchor.anchor_a, anchor.anchor_b, taps[0], taps[1], fit);
+  const y0 = taps.reduce((s, p) => s + p[1], 0) / taps.length;
+  const pts = taps.map((p) => [p[0], p[2]]);
+  const sunAlt = winterSunAltitude(parseFloat($("lat").value) || 20);
+  const setback = Math.max(0, parseFloat($("setback").value) || 0);
+  const tiltDeg = liveTilt ? TILT : 0;
+  let L;
+  try {
+    L = layoutRoof(pts, { setback, tiltDeg, sunAltDeg: sunAlt });
+  } catch (e) {
+    $("hud-txt").innerHTML = `Can't use these corners<small>${e.message}. Press Redo.</small>`;
+    return;
+  }
   group = new THREE.Group();
-  group.add(model);
-  anchor.outline.forEach((r) => group.add(lineLoop(r, 0xe5483f, 0.03)));
-  anchor.keepouts.forEach((r) => group.add(lineLoop(r, 0xf08c28, 0.03)));
-  // invisible floor that only shows the panels' shadows
-  const ring = anchor.outline[0];
-  const xs = ring.map((p) => p[0]), zs = ring.map((p) => p[2]);
-  shadow = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(...xs) - Math.min(...xs) + 4, Math.max(...zs) - Math.min(...zs) + 4)
-                            .rotateX(-Math.PI / 2), new THREE.ShadowMaterial({ opacity: 0.3 }));
-  shadow.position.set((Math.max(...xs) + Math.min(...xs)) / 2, anchor.anchor_a[1], (Math.max(...zs) + Math.min(...zs)) / 2);
-  shadow.receiveShadow = true;
-  group.add(shadow);
-  group.scale.setScalar(pl.scale);
-  group.rotation.y = pl.yaw;
-  group.position.fromArray(pl.position);
+  group.add(lineLoop(L.roof.map((p) => v3(p, y0 + 0.02)), COL.roof));
+  if (L.usable) group.add(lineLoop(L.usable.map((p) => v3(p, y0 + 0.02)), COL.keep));
+  const xs = L.roof.map((p) => p[0]), zs = L.roof.map((p) => p[1]);
+  group.add(shadowCatcher((Math.max(...xs) + Math.min(...xs)) / 2, y0, (Math.max(...zs) + Math.min(...zs)) / 2,
+                          Math.max(...xs) - Math.min(...xs) + 4, Math.max(...zs) - Math.min(...zs) + 4));
+  group.add(panelMeshes(L, y0, tiltDeg));
+  scene.add(group);
+  if (tapLine) { scene.remove(tapLine); tapLine = null; }
+  const n = L.panels.length, kwp = (n * PANEL.watts) / 1000;
+  const sides = sideLengths(L.roof).map((s) => s.toFixed(2)).join(" · ");
+  $("hud-txt").innerHTML = n
+    ? `${n} panels · ${kwp.toFixed(1)} kWp · ${liveTilt ? `tilted ${TILT}°` : "flat"}` +
+      `<small>sides ${sides} m · roof ${area(L.roof).toFixed(1)} m² · ${L.orientation}` +
+      (liveTilt ? ` · row pitch ${L.rowPitch.toFixed(2)} m` : "") + `</small>`
+    : `No panel fits<small>sides ${sides} m · ${setback} m setback leaves too little room</small>`;
+  $("o-flat").hidden = $("o-tilt").hidden = false;
+}
+
+function showDesign() {
+  if (group) scene.remove(group);
+  const pl = solvePlacement(anchor.anchor_a, anchor.anchor_b, taps[0], taps[1], false);
+  group = new THREE.Group();
+  const inner = new THREE.Group();
+  inner.add(model);
+  const lift = (r, c) => lineLoop(r.map((p) => new THREE.Vector3(p[0], p[1] + 0.03, p[2])), c);
+  anchor.outline.forEach((r) => inner.add(lift(r, COL.roof)));
+  anchor.keepouts.forEach((r) => inner.add(lift(r, COL.keep)));
+  const ring = anchor.outline[0], xs = ring.map((p) => p[0]), zs = ring.map((p) => p[2]);
+  inner.add(shadowCatcher((Math.max(...xs) + Math.min(...xs)) / 2, anchor.anchor_a[1], (Math.max(...zs) + Math.min(...zs)) / 2,
+                          Math.max(...xs) - Math.min(...xs) + 4, Math.max(...zs) - Math.min(...zs) + 4));
+  inner.rotation.y = pl.yaw;
+  inner.position.fromArray(pl.position);
+  group.add(inner);
   scene.add(group);
   const sign = pl.errorPct >= 0 ? "+" : "";
-  $("hud-txt").innerHTML = (fit ? "Scaled to fit your taps" : "Placed at true size") +
+  $("hud-txt").innerHTML = "Scanned design placed at true size" +
     `<small>tapped ${pl.tappedLength.toFixed(2)} m · design ${pl.designLength.toFixed(2)} m · ${sign}${pl.errorPct.toFixed(1)} %</small>`;
-  $("o-true").hidden = $("o-fit").hidden = false;
+}
+
+const need = () => (mode === "four" ? 4 : 2);
+function prompt() {
+  const k = taps.length;
+  const names = ["corner A (green)", "corner B (blue), the other end of the sunny edge", "a third corner", "the last corner"];
+  if (k < need()) $("hud-txt").innerHTML = `Put the ring on ${names[k]} and tap` +
+    (k ? `<small>${k} of ${need()} corners</small>` : "");
+}
+
+function redrawTapLine() {
+  if (tapLine) scene.remove(tapLine);
+  tapLine = null;
+  if (taps.length >= 2 && taps.length < need()) {
+    tapLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(taps.map((p) => new THREE.Vector3(p[0], p[1] + 0.02, p[2]))),
+                             new THREE.LineBasicMaterial({ color: 0xffffff }));
+    scene.add(tapLine);
+  }
+}
+
+function afterTapsChanged() {
+  if (group && taps.length < need()) { scene.remove(group); group = null; }
+  $("o-flat").hidden = $("o-tilt").hidden = true;
+  redrawTapLine();
+  if (taps.length === need()) (mode === "four" ? showLive : showDesign)();
+  else prompt();
 }
 
 function resetTaps() {
   taps = [];
   tapMarks.forEach((m) => scene.remove(m));
   tapMarks = [];
-  if (group) { scene.remove(group); group = null; }
-  $("o-true").hidden = $("o-fit").hidden = true;
-  $("hud-txt").textContent = "Put the ring on corner A (green) and tap";
+  afterTapsChanged();
+}
+
+function undoTap() {
+  if (!taps.length) return;
+  taps.pop();
+  scene.remove(tapMarks.pop());
+  afterTapsChanged();
 }
 
 function onSelect() {
-  if (!reticle.visible || taps.length >= 2 || !model) return;
+  if (!reticle.visible || taps.length >= need()) return;
+  if (mode === "two" && !model) return;
   const p = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
   taps.push(p.toArray());
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 16),
-                           new THREE.MeshBasicMaterial({ color: taps.length === 1 ? 0x1f9d55 : 0x2563eb }));
+  const color = taps.length === 1 ? COL.a : taps.length === 2 ? COL.b : COL.other;
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 16), new THREE.MeshBasicMaterial({ color }));
   m.position.copy(p).y += 0.15;
   scene.add(m); tapMarks.push(m);
-  if (taps.length === 1) $("hud-txt").textContent = "Now walk to corner B (blue) and tap";
-  else placeDesign();
+  afterTapsChanged();
 }
 
-function setFit(v) {
-  fit = v;
-  $("o-true").setAttribute("aria-pressed", String(!v));
-  $("o-fit").setAttribute("aria-pressed", String(v));
-  if (taps.length === 2) placeDesign();
+function setTilt(v) {
+  liveTilt = v;
+  $("o-flat").setAttribute("aria-pressed", String(!v));
+  $("o-tilt").setAttribute("aria-pressed", String(v));
+  if (taps.length === 4) showLive();
 }
 
 $("start").onclick = async () => {
-  if (!model) { $("status").textContent = "Panels are still loading, try again in a second."; return; }
+  if (mode === "two" && (!model || !anchor)) { $("status").textContent = "The scanned design is still loading, try again in a second."; return; }
   if (!renderer) buildScene();
   try {
     session = await navigator.xr.requestSession("immersive-ar", {
-      requiredFeatures: ["hit-test"], optionalFeatures: ["dom-overlay", "local-floor"],
+      requiredFeatures: ["hit-test"], optionalFeatures: ["dom-overlay"],
       domOverlay: { root: $("overlay") } });
   } catch (e) {
     $("status").textContent = "AR could not start: " + e.message; return;
@@ -268,16 +417,16 @@ $("start").onclick = async () => {
     hitSource = null; resetTaps(); renderer.setAnimationLoop(null);
   });
   resetTaps();
+  let found = false;
   $("hud-txt").textContent = "Move the phone slowly to find the surface";
   renderer.setAnimationLoop((t, frame) => {
     if (frame && hitSource) {
       const hits = frame.getHitTestResults(hitSource);
       const pose = hits.length && hits[0].getPose(refSpace);
-      reticle.visible = !!pose && taps.length < 2;
+      reticle.visible = !!pose && taps.length < need();
       if (pose) {
         reticle.matrix.fromArray(pose.transform.matrix);
-        if (taps.length === 0 && $("hud-txt").textContent.startsWith("Move"))
-          $("hud-txt").textContent = "Put the ring on corner A (green) and tap";
+        if (!found) { found = true; prompt(); }
       }
     }
     renderer.render(scene, camera);
@@ -286,10 +435,31 @@ $("start").onclick = async () => {
 
 // taps on overlay buttons must not also count as a corner tap
 $("overlay").addEventListener("beforexrselect", (e) => { if (e.target.closest("button")) e.preventDefault(); });
-$("o-true").onclick = () => setFit(false);
-$("o-fit").onclick = () => setFit(true);
+$("o-flat").onclick = () => setTilt(false);
+$("o-tilt").onclick = () => setTilt(true);
+$("o-undo").onclick = undoTap;
 $("o-redo").onclick = resetTaps;
 $("o-exit").onclick = () => session && session.end();
+
+// Desktop check without AR: ar.html?simulate renders four fake taps from above
+window.__solar = {
+  simulate(corners = [[0, 0, 0], [10, 0, 0], [10, 0, -7], [0, 0, -7]], tilt = false, eye = [-4, 9, 8]) {
+    if (!renderer) buildScene();
+    mode = "four"; liveTilt = tilt;
+    $("overlay").classList.add("on");
+    taps = corners.map((c) => c.slice());
+    showLive();
+    renderer.domElement.style.cssText = "position:fixed;inset:0;z-index:0";
+    renderer.setSize(innerWidth, innerHeight);
+    camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 200);
+    const c = corners.reduce((a, p) => [a[0] + p[0] / 4, 0, a[2] + p[2] / 4], [0, 0, 0]);
+    camera.position.set(c[0] + eye[0], eye[1], c[2] + eye[2]); camera.up.set(0, 0, -1); camera.lookAt(c[0], 0, c[2]);
+    scene.background = new THREE.Color(0x8a9099);
+    const loop = () => renderer.render(scene, camera);
+    renderer.setAnimationLoop(loop);
+    return $("hud-txt").textContent;
+  },
+};
 </script>
 </body>
 </html>
